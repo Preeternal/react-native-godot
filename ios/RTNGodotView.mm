@@ -260,6 +260,8 @@ static UIView *_currentView = nil;
 			newRenderingLayer.position = CGPointMake(0, 0);
 			newRenderingLayer.anchorPoint = CGPointMake(0, 0);
 			newRenderingLayer.contentsScale = GodotModule::get_singleton()->get_content_scale_factor();
+			newRenderingLayer.magnificationFilter = kCAFilterNearest;
+			newRenderingLayer.minificationFilter = kCAFilterNearest;
 
 			godot::RenderingNativeSurface *ptr = godot::Object::cast_to<godot::RenderingNativeSurface>(appleSurface.ptr());
 			godot::Ref<godot::RenderingNativeSurface> nativeSurface(ptr);
@@ -354,13 +356,6 @@ static UIView *_currentView = nil;
 	}
 
 	{
-		NSLog(@"RTNGodotView: self.contentView.bounds: %@", NSStringFromCGRect(self.bounds));
-		NSLog(@"RTNGodotView: self.contentView.layer.bounds: %@", NSStringFromCGRect(self.layer.bounds));
-		NSLog(@"RTNGodotView: _renderingLayer.bounds: %@", NSStringFromCGRect(_renderingLayer.bounds));
-		NSLog(@"RTNGodotView: self.contentView.layer.frame: %@", NSStringFromCGRect(self.layer.frame));
-		NSLog(@"RTNGodotView: self.contentView.frame: %@", NSStringFromCGRect(self.frame));
-		NSLog(@"RTNGodotView: _renderingLayer.frame: %@", NSStringFromCGRect(_renderingLayer.frame));
-
 		{
 			double contentScaleFactor = GodotModule::get_singleton()->get_content_scale_factor();
 			// Make sure that the rendering layer has always at least 10x10 pixel size
@@ -370,8 +365,6 @@ static UIView *_currentView = nil;
 					godot::MAX(10, self.layer.bounds.size.height));
 
 			_renderingLayer.bounds = bounds;
-			NSLog(@"RTNGodotView: _renderingLayer.bounds: %@", NSStringFromCGRect(_renderingLayer.bounds));
-			NSLog(@"RTNGodotView: _renderingLayer.frame: %@", NSStringFromCGRect(_renderingLayer.frame));
 			GodotModule::get_singleton()->runOnGodotThread([=]() {
 				godot::DisplayServerEmbedded *dse = godot::DisplayServerEmbedded::get_singleton();
 				if (dse) {

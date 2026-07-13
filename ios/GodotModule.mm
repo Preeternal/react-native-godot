@@ -44,6 +44,7 @@
 #include <string>
 
 static constexpr NSInteger kGodotMaxFramesPerSecond = 60;
+static constexpr CGFloat GODOT_RENDER_SCALE_FACTOR = 1.0;
 
 static NSInteger getGodotPreferredFramesPerSecond() {
 	godot::Engine *engine = godot::Engine::get_singleton();
@@ -281,7 +282,7 @@ godot::GodotInstance *GodotModule::get_or_create_instance(std::vector<std::strin
 	instance = reinterpret_cast<godot::GodotInstance *>(godot::internal::get_object_instance_binding(instance_ptr));
 
 	CGRect screen = [[UIScreen mainScreen] bounds];
-	CGFloat contentScaleFactor = [[UIScreen mainScreen] scale];
+	CGFloat contentScaleFactor = GODOT_RENDER_SCALE_FACTOR;
 
 	LOGI("Initialize Main Window Layer on the main thread");
 
@@ -292,6 +293,8 @@ godot::GodotInstance *GodotModule::get_or_create_instance(std::vector<std::strin
 	mainWindowLayer.position = CGPointMake(0, 0);
 	mainWindowLayer.anchorPoint = CGPointMake(0, 0);
 	mainWindowLayer.contentsScale = contentScaleFactor;
+	mainWindowLayer.magnificationFilter = kCAFilterNearest;
+	mainWindowLayer.minificationFilter = kCAFilterNearest;
 
 	godot::RenderingNativeSurface *ptr = godot::Object::cast_to<godot::RenderingNativeSurface>(appleSurface.ptr());
 	godot::Ref<godot::RenderingNativeSurface> nativeSurface(ptr);
@@ -304,7 +307,7 @@ godot::GodotInstance *GodotModule::get_or_create_instance(std::vector<std::strin
 		std::lock_guard lock(_mutex);
 
 		data->displayLink = [CADisplayLink displayLinkWithTarget:data->thread
-														selector:@selector(step:)];
+												selector:@selector(step:)];
 		configureGodotDisplayLink(data->displayLink);
 		[data->displayLink addToRunLoop:[NSRunLoop currentRunLoop]
 								forMode:NSRunLoopCommonModes];
@@ -501,7 +504,7 @@ void GodotModule::updateState() {
 				}
 				if (!data->displayLink) {
 					data->displayLink = [CADisplayLink displayLinkWithTarget:data->thread
-																	selector:@selector(step:)];
+														selector:@selector(step:)];
 					configureGodotDisplayLink(data->displayLink);
 					[data->displayLink addToRunLoop:[NSRunLoop currentRunLoop]
 											forMode:NSRunLoopCommonModes];
