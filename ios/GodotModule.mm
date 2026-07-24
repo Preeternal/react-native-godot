@@ -485,33 +485,26 @@ void GodotModule::resume() {
 
 void GodotModule::updateState() {
 	ApplePlatformData *data = static_cast<ApplePlatformData *>(_data);
-	if (!_instance) {
-		return;
-	}
-	if (data->in_background || data->paused) {
-		if (data->displayLink) {
-			data->displayLink.paused = true;
-			[data->displayLink invalidate];
-			data->displayLink = nil;
+	[data->thread scheduleBlock:^{
+		std::lock_guard lock(_mutex);
+		ApplePlatformData *threadData = static_cast<ApplePlatformData *>(_data);
+		if (!_instance) {
+			return;
 		}
-	} else {
-		if (!data->displayLink) {
-			[data->thread scheduleBlock:^{
-				std::lock_guard lock(_mutex);
-				ApplePlatformData *data = static_cast<ApplePlatformData *>(_data);
-				if (!_instance) {
-					return;
-				}
-				if (!data->displayLink) {
-					data->displayLink = [CADisplayLink displayLinkWithTarget:data->thread
+		if (threadData->in_background || threadData->paused) {
+			if (threadData->displayLink) {
+				threadData->displayLink.paused = true;
+				[threadData->displayLink invalidate];
+				threadData->displayLink = nil;
+			}
+		} else if (!threadData->displayLink) {
+			threadData->displayLink = [CADisplayLink displayLinkWithTarget:threadData->thread
 														selector:@selector(step:)];
-					configureGodotDisplayLink(data->displayLink);
-					[data->displayLink addToRunLoop:[NSRunLoop currentRunLoop]
-											forMode:NSRunLoopCommonModes];
-				}
-			}];
+			configureGodotDisplayLink(threadData->displayLink);
+			[threadData->displayLink addToRunLoop:[NSRunLoop currentRunLoop]
+									forMode:NSRunLoopCommonModes];
 		}
-	}
+	}];
 }
 
 class CPPCallable : public godot::CallableCustom {

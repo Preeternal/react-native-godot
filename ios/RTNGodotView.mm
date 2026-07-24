@@ -52,8 +52,8 @@ using namespace facebook::react;
 
 static const int MAX_TOUCH_COUNT = 32;
 
-static NSMutableArray<UIView *> *_views = [NSMutableArray array];
-static UIView *_currentView = nil;
+static NSHashTable<UIView *> *_views = [NSHashTable weakObjectsHashTable];
+static __weak UIView *_currentView = nil;
 
 @interface RTNGodotView () <RCTRTNGodotViewViewProtocol>
 @end
@@ -65,7 +65,8 @@ static UIView *_currentView = nil;
 	std::vector<UITouch *> _touches;
 	bool _propsUpdated;
 	bool _instanceCallbackRegistered;
-	bool _addingGodotView;
+	bool _isMounted;
+	uint64_t _attachmentGeneration;
 }
 
 + (BOOL)shouldBeRecycled {
@@ -87,7 +88,7 @@ static UIView *_currentView = nil;
 	[_views removeObject:view];
 
 	if (_views.count > 0) {
-		_currentView = [_views lastObject];
+		_currentView = _views.allObjects.lastObject;
 		if (mainLayer) {
 			[_currentView.layer addSublayer:mainLayer];
 			[_currentView setNeedsLayout];
@@ -99,8 +100,17 @@ static UIView *_currentView = nil;
 
 + (CALayer *)addMainLayerToGodotView:(UIView *)view {
 	godot::Ref<godot::RenderingNativeSurface> nativeSurface = GodotModule::get_singleton()->get_main_rendering_surface();
+	if (nativeSurface.is_null()) {
+		return nil;
+	}
 	godot::Ref<godot::RenderingNativeSurfaceApple> appleSurface = godot::Object::cast_to<godot::RenderingNativeSurfaceApple>(*nativeSurface);
+	if (appleSurface.is_null()) {
+		return nil;
+	}
 	CALayer *mainLayer = (__bridge CALayer *)(void *)appleSurface->get_layer();
+	if (!mainLayer) {
+		return nil;
+	}
 	if (![_views containsObject:view]) {
 		[_views addObject:view];
 	}
@@ -137,7 +147,8 @@ static UIView *_currentView = nil;
 	_propsUpdated = false;
 	_instanceCallbackRegistered = false;
 	_windowName = @"";
-	_addingGodotView = false;
+	_isMounted = false;
+	_attachmentGeneration = 0;
 }
 
 //Setter method
@@ -172,27 +183,49 @@ static UIView *_currentView = nil;
 	return [self sizeThatFits:CGSizeMake(CGFLOAT_MAX, CGFLOAT_MAX)];
 }
 
-- (void)deinit {
+- (void)dealloc {
+	if (_instanceCallbackRegistered) {
+		GodotModule::get_singleton()->unregisterWindowUpdateCallback((__bridge void *)self);
+	}
+	if ([NSThread isMainThread]) {
+		[RTNGodotView removeMainLayerFromGodotView:self];
+	}
 }
 
 - (void)addToGodotView {
 	NSLog(@"RTNGodotView: Adding Godot View: %@, windowName: %@", self, _windowName);
+	if (!_isMounted) {
+		return;
+	}
 
 	godot::GodotInstance *instance = GodotModule::get_singleton()->get_instance();
 
 	if (!_instanceCallbackRegistered) {
 		GodotModule::get_singleton()->unregisterWindowUpdateCallback((__bridge void *)self);
 		std::string newWinName = [_windowName UTF8String];
-		GodotModule::get_singleton()->registerWindowUpdateCallback(newWinName, (__bridge void *)self, [self](bool adding) {
+		__weak RTNGodotView *weakSelf = self;
+		GodotModule::get_singleton()->registerWindowUpdateCallback(newWinName, (__bridge void *)self, [weakSelf](bool adding) {
+			RTNGodotView *strongSelf = weakSelf;
+			if (!strongSelf) {
+				return;
+			}
 			if (adding) {
 				dispatch_async(dispatch_get_main_queue(), ^{
-					NSLog(@"RTNGodotView: Adding Godot View from Window Update Callback: %@", self);
-					[self addToGodotView];
+					RTNGodotView *view = weakSelf;
+					if (!view) {
+						return;
+					}
+					NSLog(@"RTNGodotView: Adding Godot View from Window Update Callback: %@", view);
+					[view addToGodotView];
 				});
 			} else {
 				dispatch_async(dispatch_get_main_queue(), ^{
-					NSLog(@"RTNGodotView: Removing Godot View from Window Update Callback: %@", self);
-					[self removeFromGodotView:false unregister:false];
+					RTNGodotView *view = weakSelf;
+					if (!view) {
+						return;
+					}
+					NSLog(@"RTNGodotView: Removing Godot View from Window Update Callback: %@", view);
+					[view removeFromGodotView:false unregister:false];
 				});
 			} }, nullptr);
 		_instanceCallbackRegistered = true;
@@ -209,7 +242,7 @@ static UIView *_currentView = nil;
 		return;
 	}
 
-	_addingGodotView = true;
+	const uint64_t attachmentGeneration = ++_attachmentGeneration;
 	if ([@"" isEqualToString:_windowName]) {
 		// Set up the main window
 
@@ -221,11 +254,18 @@ static UIView *_currentView = nil;
 				return;
 			}
 			godot::Window *newWindow = sceneTree->get_root();
+			const uint64_t windowId = newWindow->get_instance_id();
 			dispatch_async(dispatch_get_main_queue(), ^{
-				self->_windowId = newWindow->get_instance_id();
-				self->_renderingLayer = [RTNGodotView addMainLayerToGodotView:self];
+				if (!self->_isMounted || self->_attachmentGeneration != attachmentGeneration) {
+					return;
+				}
+				CALayer *renderingLayer = [RTNGodotView addMainLayerToGodotView:self];
+				if (!renderingLayer) {
+					return;
+				}
+				self->_windowId = windowId;
+				self->_renderingLayer = renderingLayer;
 				[self setNeedsLayout];
-				self->_addingGodotView = false;
 			});
 		});
 
@@ -245,11 +285,9 @@ static UIView *_currentView = nil;
 
 			if (!newWindow) {
 				NSLog(@"RTNGodotView: Godot Window not valid: 0x%p", newWindow);
-				dispatch_async(dispatch_get_main_queue(), ^{
-					self->_addingGodotView = false;
-				});
 				return;
 			}
+			const uint64_t windowId = newWindow->get_instance_id();
 
 			CGRect screen = [[UIScreen mainScreen] bounds];
 			CALayer *newRenderingLayer = nil;
@@ -282,11 +320,13 @@ static UIView *_currentView = nil;
 			newWindow->connect("tree_exited", exited_cb);
 
 			dispatch_async(dispatch_get_main_queue(), ^{
-				self->_windowId = newWindow->get_instance_id();
+				if (!self->_isMounted || self->_attachmentGeneration != attachmentGeneration) {
+					return;
+				}
+				self->_windowId = windowId;
 				self->_renderingLayer = newRenderingLayer;
 				[self.layer addSublayer:self->_renderingLayer];
 				[self setNeedsLayout];
-				self->_addingGodotView = false;
 			});
 		});
 	}
@@ -294,14 +334,7 @@ static UIView *_currentView = nil;
 
 - (void)removeFromGodotView:(bool)addAfter unregister:(bool)unregister {
 	NSLog(@"RTNGodotView: Removing Godot View: %@, windowName: %@, addAfter: %d", self, _windowName, addAfter);
-	if (_addingGodotView) {
-		NSLog(@"RTNGodotView: Adding in progress, rescheduling: %@", self);
-		GodotModule::get_singleton()->runOnGodotThread([=]() {
-			dispatch_async(dispatch_get_main_queue(), ^{
-				[self removeFromGodotView:addAfter unregister:unregister];
-			});
-		});
-	}
+	++_attachmentGeneration;
 	if (unregister) {
 		GodotModule::get_singleton()->unregisterWindowUpdateCallback((__bridge void *)self);
 		self->_instanceCallbackRegistered = false;
@@ -330,11 +363,11 @@ static UIView *_currentView = nil;
 	} else {
 		if (!unregister) {
 			// This should only happen when the Godot instance is being stopped
-			dispatch_sync(dispatch_get_main_queue(), [&removeBlock]() {
+			dispatch_sync(dispatch_get_main_queue(), ^{
 				removeBlock();
 			});
 		} else {
-			dispatch_async(dispatch_get_main_queue(), [&removeBlock]() {
+			dispatch_async(dispatch_get_main_queue(), ^{
 				removeBlock();
 			});
 		}
@@ -576,7 +609,9 @@ static UIView *_currentView = nil;
 }
 
 - (void)willMoveToSuperview:(UIView *)newSuperview {
+	[super willMoveToSuperview:newSuperview];
 	NSLog(@"RTNGodotView: %@ will move to superview %@", self, newSuperview);
+	_isMounted = newSuperview != nil;
 	if (newSuperview == nil) {
 		[self removeFromGodotView:false unregister:true];
 	} else {
@@ -585,19 +620,21 @@ static UIView *_currentView = nil;
 }
 
 - (void)updateProps:(Props::Shared const &)props oldProps:(Props::Shared const &)oldProps {
-	const auto &oldViewProps = *std::static_pointer_cast<RTNGodotViewProps const>(oldProps);
-	const auto &newViewProps = *std::static_pointer_cast<RTNGodotViewProps const>(props);
+	[super updateProps:props oldProps:oldProps];
 
 	// Handle your props here
-	if ((oldProps == nullptr && props != nullptr) ||
-			((oldProps != nullptr && props != nullptr) && (oldViewProps.windowName != newViewProps.windowName))) {
+	if (props != nullptr &&
+			(oldProps == nullptr ||
+					std::static_pointer_cast<RTNGodotViewProps const>(oldProps)->windowName !=
+							std::static_pointer_cast<RTNGodotViewProps const>(props)->windowName)) {
+		const auto &newViewProps = *std::static_pointer_cast<RTNGodotViewProps const>(props);
 		[self setWindowName:[NSString stringWithUTF8String:newViewProps.windowName.c_str()]];
 	}
-	//[super updateProps:props oldProps:oldProps];
 }
 
-- (void)didMoveToSuperview:(UIView *)newSuperview {
-	NSLog(@"RTNGodotView: %@ did move to superview %@", self, newSuperview);
+- (void)didMoveToSuperview {
+	[super didMoveToSuperview];
+	NSLog(@"RTNGodotView: %@ did move to superview %@", self, self.superview);
 }
 
 + (ComponentDescriptorProvider)componentDescriptorProvider {
