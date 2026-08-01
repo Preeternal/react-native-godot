@@ -119,6 +119,10 @@ static __weak UIView *_currentView = nil;
 	}
 
 	[view.layer addSublayer:mainLayer];
+	[CATransaction begin];
+	[CATransaction setDisableActions:YES];
+	mainLayer.frame = view.bounds;
+	[CATransaction commit];
 	[view setNeedsLayout];
 
 	_currentView = view;
@@ -375,6 +379,8 @@ static __weak UIView *_currentView = nil;
 }
 
 - (void)layoutSubviews {
+	[super layoutSubviews];
+
 	godot::GodotInstance *instance = GodotModule::get_singleton()->get_instance();
 
 	if (!instance || !instance->is_started()) {
@@ -388,30 +394,31 @@ static __weak UIView *_currentView = nil;
 		return;
 	}
 
-	{
-		{
-			double contentScaleFactor = GodotModule::get_singleton()->get_content_scale_factor();
-			// Make sure that the rendering layer has always at least 10x10 pixel size
-			CGRect bounds = CGRectMake(self.layer.bounds.origin.x,
-					self.layer.bounds.origin.x,
-					godot::MAX(10, self.layer.bounds.size.width),
-					godot::MAX(10, self.layer.bounds.size.height));
+	double contentScaleFactor = GodotModule::get_singleton()->get_content_scale_factor();
+	CGSize renderingSize = CGSizeMake(
+			godot::MAX(10, self.bounds.size.width),
+			godot::MAX(10, self.bounds.size.height));
+	CGRect renderingFrame = CGRectMake(0, 0, renderingSize.width, renderingSize.height);
+	uint64_t windowId = _windowId;
+	godot::Vector2i pixelSize(
+			renderingSize.width * contentScaleFactor,
+			renderingSize.height * contentScaleFactor);
 
-			_renderingLayer.bounds = bounds;
-			GodotModule::get_singleton()->runOnGodotThread([=]() {
-				godot::DisplayServerEmbedded *dse = godot::DisplayServerEmbedded::get_singleton();
-				if (dse) {
-					if (godot::UtilityFunctions::is_instance_id_valid(_windowId)) {
-						godot::Object *obj = godot::UtilityFunctions::instance_from_id(_windowId);
-						godot::Window *window = godot::Object::cast_to<godot::Window>(obj);
-						if (window) {
-							dse->resize_window(godot::Vector2i(_renderingLayer.bounds.size.width * contentScaleFactor, _renderingLayer.bounds.size.height * contentScaleFactor), window->get_window_id());
-						}
-					}
-				}
-			});
+	[CATransaction begin];
+	[CATransaction setDisableActions:YES];
+	_renderingLayer.frame = renderingFrame;
+	[CATransaction commit];
+
+	GodotModule::get_singleton()->runOnGodotThread([=]() {
+		godot::DisplayServerEmbedded *dse = godot::DisplayServerEmbedded::get_singleton();
+		if (dse && godot::UtilityFunctions::is_instance_id_valid(windowId)) {
+			godot::Object *obj = godot::UtilityFunctions::instance_from_id(windowId);
+			godot::Window *window = godot::Object::cast_to<godot::Window>(obj);
+			if (window) {
+				dse->resize_window(pixelSize, window->get_window_id());
+			}
 		}
-	}
+	});
 }
 
 - (int)getTouchId:(UITouch *)touch {
