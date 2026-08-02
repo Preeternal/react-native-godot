@@ -30,6 +30,7 @@
 
 #include <libgodot/libgodot.h>
 #include <godot_cpp/classes/display_server_embedded.hpp>
+#include <godot_cpp/classes/engine.hpp>
 #include <godot_cpp/classes/gd_extension_manager.hpp>
 #include <godot_cpp/classes/rendering_native_surface.hpp>
 #include <godot_cpp/classes/rendering_native_surface_apple.hpp>
@@ -37,9 +38,44 @@
 
 #include <dlfcn.h>
 
+#include <algorithm>
 #include <map>
 #include <mutex>
 #include <string>
+
+static constexpr NSInteger kGodotMaxFramesPerSecond = 60;
+
+static NSInteger getGodotPreferredFramesPerSecond() {
+	godot::Engine *engine = godot::Engine::get_singleton();
+	if (!engine) {
+		return kGodotMaxFramesPerSecond;
+	}
+
+	const int32_t configuredMaxFps = engine->get_max_fps();
+	if (configuredMaxFps <= 0) {
+		return kGodotMaxFramesPerSecond;
+	}
+
+	const NSInteger requestedFramesPerSecond = static_cast<NSInteger>(configuredMaxFps);
+	return std::min(requestedFramesPerSecond, kGodotMaxFramesPerSecond);
+}
+
+static void configureGodotDisplayLink(CADisplayLink *displayLink) {
+	const NSInteger preferredFramesPerSecond = getGodotPreferredFramesPerSecond();
+	if (@available(iOS 15.0, *)) {
+		// Apple gives 30 Hz and 60 Hz special priority for games. Allowing the
+		// system to fall back to 30 Hz also handles thermal and power policies
+		// more gracefully than demanding an exact 60 Hz cadence.
+		const NSInteger minimumFramesPerSecond =
+				std::min<NSInteger>(30, preferredFramesPerSecond);
+		displayLink.preferredFrameRateRange = CAFrameRateRangeMake(
+				minimumFramesPerSecond,
+				preferredFramesPerSecond,
+				preferredFramesPerSecond);
+	} else {
+		displayLink.preferredFramesPerSecond = preferredFramesPerSecond;
+	}
+}
 
 @interface GodotThread : NSObject
 
@@ -268,7 +304,8 @@ godot::GodotInstance *GodotModule::get_or_create_instance(std::vector<std::strin
 		std::lock_guard lock(_mutex);
 
 		data->displayLink = [CADisplayLink displayLinkWithTarget:data->thread
-														selector:@selector(step:)];
+												selector:@selector(step:)];
+		configureGodotDisplayLink(data->displayLink);
 		[data->displayLink addToRunLoop:[NSRunLoop currentRunLoop]
 								forMode:NSRunLoopCommonModes];
 		data->mainWindowLayer = mainWindowLayer;
@@ -419,6 +456,7 @@ void GodotModule::appPause() {
 void GodotModule::appResume() {
 	std::lock_guard lock(_mutex);
 	ApplePlatformData *data = static_cast<ApplePlatformData *>(_data);
+	data->in_background = false;
 	[data->thread scheduleBlock:^{
 		std::lock_guard lock(_mutex);
 		if (_instance) {
@@ -444,32 +482,26 @@ void GodotModule::resume() {
 
 void GodotModule::updateState() {
 	ApplePlatformData *data = static_cast<ApplePlatformData *>(_data);
-	if (!_instance) {
-		return;
-	}
-	if (data->in_background || data->paused) {
-		if (data->displayLink) {
-			data->displayLink.paused = true;
-			[data->displayLink invalidate];
-			data->displayLink = nil;
+	[data->thread scheduleBlock:^{
+		std::lock_guard lock(_mutex);
+		ApplePlatformData *threadData = static_cast<ApplePlatformData *>(_data);
+		if (!_instance) {
+			return;
 		}
-	} else {
-		if (!data->displayLink) {
-			[data->thread scheduleBlock:^{
-				std::lock_guard lock(_mutex);
-				ApplePlatformData *data = static_cast<ApplePlatformData *>(_data);
-				if (!_instance) {
-					return;
-				}
-				if (!data->displayLink) {
-					data->displayLink = [CADisplayLink displayLinkWithTarget:data->thread
-																	selector:@selector(step:)];
-					[data->displayLink addToRunLoop:[NSRunLoop currentRunLoop]
-											forMode:NSRunLoopCommonModes];
-				}
-			}];
+		if (threadData->in_background || threadData->paused) {
+			if (threadData->displayLink) {
+				threadData->displayLink.paused = true;
+				[threadData->displayLink invalidate];
+				threadData->displayLink = nil;
+			}
+		} else if (!threadData->displayLink) {
+			threadData->displayLink = [CADisplayLink displayLinkWithTarget:threadData->thread
+														selector:@selector(step:)];
+			configureGodotDisplayLink(threadData->displayLink);
+			[threadData->displayLink addToRunLoop:[NSRunLoop currentRunLoop]
+									forMode:NSRunLoopCommonModes];
 		}
-	}
+	}];
 }
 
 class CPPCallable : public godot::CallableCustom {

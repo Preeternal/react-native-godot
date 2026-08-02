@@ -23,12 +23,13 @@
 /* SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.                 */
 /**************************************************************************/
 
-import type { HostComponent, ViewProps } from "react-native";
+import type { CodegenTypes, HostComponent, ViewProps } from "react-native";
 
 import { codegenNativeComponent } from "react-native";
 
 export interface NativeProps extends ViewProps {
   windowName?: string;
+  onSurfaceReady?: CodegenTypes.DirectEventHandler<Readonly<{}>>;
 }
 
 export default codegenNativeComponent<NativeProps>(
