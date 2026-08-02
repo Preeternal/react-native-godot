@@ -302,8 +302,6 @@ static __weak UIView *_currentView = nil;
 			newRenderingLayer.position = CGPointMake(0, 0);
 			newRenderingLayer.anchorPoint = CGPointMake(0, 0);
 			newRenderingLayer.contentsScale = GodotModule::get_singleton()->get_content_scale_factor();
-			newRenderingLayer.magnificationFilter = kCAFilterNearest;
-			newRenderingLayer.minificationFilter = kCAFilterNearest;
 
 			godot::RenderingNativeSurface *ptr = godot::Object::cast_to<godot::RenderingNativeSurface>(appleSurface.ptr());
 			godot::Ref<godot::RenderingNativeSurface> nativeSurface(ptr);
