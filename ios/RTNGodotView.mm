@@ -26,6 +26,8 @@
 #import <React/RCTLog.h>
 #import <React/RCTUIManager.h>
 
+#include <cmath>
+
 #include <libgodot/libgodot.h>
 #include <godot_cpp/classes/display_server_embedded.hpp>
 #include <godot_cpp/classes/engine.hpp>
@@ -67,6 +69,8 @@ static __weak UIView *_currentView = nil;
 	bool _instanceCallbackRegistered;
 	bool _isMounted;
 	uint64_t _attachmentGeneration;
+	uint64_t _resizeGeneration;
+	godot::Vector2i _lastRequestedPixelSize;
 }
 
 + (BOOL)shouldBeRecycled {
@@ -88,10 +92,16 @@ static __weak UIView *_currentView = nil;
 	[_views removeObject:view];
 
 	if (_views.count > 0) {
-		_currentView = _views.allObjects.lastObject;
+		RTNGodotView *nextView = (RTNGodotView *)_views.allObjects.lastObject;
+		_currentView = nextView;
 		if (mainLayer) {
-			[_currentView.layer addSublayer:mainLayer];
-			[_currentView setNeedsLayout];
+			[CATransaction begin];
+			[CATransaction setDisableActions:YES];
+			mainLayer.hidden = YES;
+			[nextView.layer addSublayer:mainLayer];
+			[CATransaction commit];
+			nextView->_lastRequestedPixelSize = godot::Vector2i();
+			[nextView setNeedsLayout];
 		}
 	} else {
 		_currentView = nil;
@@ -121,6 +131,7 @@ static __weak UIView *_currentView = nil;
 	[view.layer addSublayer:mainLayer];
 	[CATransaction begin];
 	[CATransaction setDisableActions:YES];
+	mainLayer.hidden = YES;
 	mainLayer.frame = view.bounds;
 	[CATransaction commit];
 	[view setNeedsLayout];
@@ -153,6 +164,8 @@ static __weak UIView *_currentView = nil;
 	_windowName = @"";
 	_isMounted = false;
 	_attachmentGeneration = 0;
+	_resizeGeneration = 0;
+	_lastRequestedPixelSize = godot::Vector2i();
 }
 
 //Setter method
@@ -269,6 +282,7 @@ static __weak UIView *_currentView = nil;
 				}
 				self->_windowId = windowId;
 				self->_renderingLayer = renderingLayer;
+				self->_lastRequestedPixelSize = godot::Vector2i();
 				[self setNeedsLayout];
 			});
 		});
@@ -327,7 +341,12 @@ static __weak UIView *_currentView = nil;
 				}
 				self->_windowId = windowId;
 				self->_renderingLayer = newRenderingLayer;
+				self->_lastRequestedPixelSize = godot::Vector2i();
+				[CATransaction begin];
+				[CATransaction setDisableActions:YES];
+				self->_renderingLayer.hidden = YES;
 				[self.layer addSublayer:self->_renderingLayer];
+				[CATransaction commit];
 				[self setNeedsLayout];
 			});
 		});
@@ -356,6 +375,8 @@ static __weak UIView *_currentView = nil;
 		}
 		self->_windowId = 0;
 		self->_renderingLayer = nullptr;
+		self->_lastRequestedPixelSize = godot::Vector2i();
+		++self->_resizeGeneration;
 		if (addAfter) {
 			[self addToGodotView];
 		}
@@ -392,19 +413,35 @@ static __weak UIView *_currentView = nil;
 		return;
 	}
 
+	CGSize renderingSize = self.bounds.size;
+	if (renderingSize.width <= 0 || renderingSize.height <= 0) {
+		return;
+	}
+
 	double contentScaleFactor = GodotModule::get_singleton()->get_content_scale_factor();
-	CGSize renderingSize = CGSizeMake(
-			godot::MAX(10, self.bounds.size.width),
-			godot::MAX(10, self.bounds.size.height));
 	CGRect renderingFrame = CGRectMake(0, 0, renderingSize.width, renderingSize.height);
 	uint64_t windowId = _windowId;
 	godot::Vector2i pixelSize(
-			renderingSize.width * contentScaleFactor,
-			renderingSize.height * contentScaleFactor);
+			godot::MAX(1, (int32_t)std::lround(renderingSize.width * contentScaleFactor)),
+			godot::MAX(1, (int32_t)std::lround(renderingSize.height * contentScaleFactor)));
 
 	[CATransaction begin];
 	[CATransaction setDisableActions:YES];
 	_renderingLayer.frame = renderingFrame;
+	[CATransaction commit];
+
+	if (_lastRequestedPixelSize == pixelSize) {
+		return;
+	}
+
+	_lastRequestedPixelSize = pixelSize;
+	const uint64_t attachmentGeneration = _attachmentGeneration;
+	const uint64_t resizeGeneration = ++_resizeGeneration;
+	CALayer *renderingLayer = _renderingLayer;
+
+	[CATransaction begin];
+	[CATransaction setDisableActions:YES];
+	renderingLayer.hidden = YES;
 	[CATransaction commit];
 
 	GodotModule::get_singleton()->runOnGodotThread([=]() {
@@ -414,6 +451,28 @@ static __weak UIView *_currentView = nil;
 			godot::Window *window = godot::Object::cast_to<godot::Window>(obj);
 			if (window) {
 				dse->resize_window(pixelSize, window->get_window_id());
+				// Render one frame at the new size before exposing the layer. Without
+				// this barrier iOS briefly composites the previous framebuffer into
+				// the new host bounds, which appears as a frozen bottom-left image.
+				GodotModule::get_singleton()->iterate();
+				dispatch_async(dispatch_get_main_queue(), ^{
+					if (!self->_isMounted ||
+							self->_attachmentGeneration != attachmentGeneration ||
+							self->_resizeGeneration != resizeGeneration ||
+							self->_windowId != windowId ||
+							self->_renderingLayer != renderingLayer) {
+						return;
+					}
+
+					[CATransaction begin];
+					[CATransaction setDisableActions:YES];
+					renderingLayer.hidden = NO;
+					[CATransaction commit];
+
+					if (self->_eventEmitter) {
+						static_cast<const RTNGodotViewEventEmitter &>(*self->_eventEmitter).onSurfaceReady({});
+					}
+				});
 			}
 		}
 	});
