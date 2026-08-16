@@ -186,6 +186,7 @@ android {
     minSdkVersion 29
     targetSdkVersion safeExtGet('targetSdkVersion', 33)
     ndkVersion safeExtGet('ndkVersion', "26.1.10909125")
+    consumerProguardFiles "consumer-rules.pro"
     ndk {
       // Specifies the ABI configurations of your native
       // libraries Gradle should build and package with your app.
