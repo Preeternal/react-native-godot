@@ -122,9 +122,9 @@
     {
       "name": "libgodot",
       "filename": "libgodot.xcframework.zip",
-      "version": "4.5.1.migeran.2",
-      "base_url": "https://github.com/migeran/libgodot/releases/download/",
-      "shasum": "699fcc7e3eef7d0aee3132c6ebd7a8a9a7b6b0c9da801d220d72950e4ac79958",
+      "version": "4.5.1.preeternal.1",
+      "base_url": "https://github.com/Preeternal/libgodot/releases/download/",
+      "shasum": "441131c7bd1b02a95dd336346e5afce3c777881c646a661d09d4a4918c413423",
       "destination_base_dir": "ios/libs",
       "env": "LIBGODOT_XCFRAMEWORK_PATH",
       "no_unpack": "false"
@@ -132,9 +132,9 @@
     {
       "name": "libgodot-cpp",
       "filename": "libgodot-cpp.xcframework.zip",
-      "version": "4.5.1.migeran.2",
-      "base_url": "https://github.com/migeran/libgodot/releases/download/",
-      "shasum": "be0a070d3e34774b83c2fee315271d0f0a32cfb644cc9f36bf002f17a3fc750c",
+      "version": "4.5.1.preeternal.1",
+      "base_url": "https://github.com/Preeternal/libgodot/releases/download/",
+      "shasum": "a39d8ec108fd7083b0c336c2cd559fe5eb78ffd02437f268100e7ce34ac972fd",
       "destination_base_dir": "ios/libs",
       "env": "LIBGODOT_CPP_XCFRAMEWORK_PATH",
       "no_unpack": "false"
@@ -142,9 +142,9 @@
     {
       "name": "libgodot-android",
       "filename": "libgodot-android.zip",
-      "version": "4.5.1.migeran.2",
-      "base_url": "https://github.com/migeran/libgodot/releases/download/",
-      "shasum": "5ad2b0d836e6a207ca695e690ed833326e6aba35f43a788bf17c15eb33475783",
+      "version": "4.5.1.preeternal.1",
+      "base_url": "https://github.com/Preeternal/libgodot/releases/download/",
+      "shasum": "8ea2a0e70c61d867c0d0938a2f142ae544f69c5e94b4f574c924fb60f13fc729",
       "destination_base_dir": "android/libs",
       "env": "LIBGODOT_ANDROID_PATH",
       "no_unpack": "false"
@@ -152,9 +152,9 @@
     {
       "name": "libgodot-cpp-android",
       "filename": "godot-cpp-android.zip",
-      "version": "4.5.1.migeran.2",
-      "base_url": "https://github.com/migeran/libgodot/releases/download/",
-      "shasum": "cdf543419a2397dcdcd25d8266f66cf3200cca3dd1b53c161b1b89e819dab21e",
+      "version": "4.5.1.preeternal.1",
+      "base_url": "https://github.com/Preeternal/libgodot/releases/download/",
+      "shasum": "e0f343a94360ccad3dc75577416921ed36e3300df6531045ca786d7857ce2c83",
       "destination_base_dir": "android/libs",
       "env": "LIBGODOT_CPP_ANDROID_PATH",
       "no_unpack": "false"
