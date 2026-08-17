@@ -36,6 +36,7 @@
     "test": "yarn workspace GodotTest test",
     "typecheck": "tsc --noEmit",
     "lint": "eslint js app.plugin.js --ext .js,.ts,.tsx && yarn workspace GodotTest lint",
+    "postinstall": "node scripts/download-prebuilt.js",
     "prepack": "bob build",
     "release": "release-it",
     "clean": "del-cli android/build example/android/build example/android/app/build example/ios/build"

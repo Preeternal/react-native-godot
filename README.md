@@ -54,15 +54,14 @@ environment variable to your Godot editor prior to running the above scripts:
 export GODOT_EDITOR=/path/to/godot_editor
 ```
 
-## Configure and download LibGodot
+## Install dependencies and LibGodot
 
 ```sh
 cd example
 yarn
-yarn download-prebuilt
 ```
 
-These commands will resolve all the React Native and other dependencies from npm. The second one will download the prebuilt LibGodot release from GitHub.
+Installing the dependencies also downloads the prebuilt LibGodot release from GitHub. Existing prebuilt files are reused on subsequent installs.
 
 ## Run on the iOS Simulator
 
@@ -142,15 +141,17 @@ This is the only Android configuration the package needs. Do not duplicate its m
 
 For a React Native Community CLI project, use your package manager instead and ensure the Worklets Babel plugin is enabled according to the `react-native-worklets` installation guide.
 
-## Download the prebuilt LibGodot packages
+## Prebuilt LibGodot packages
 
-The LibGodot packages used by React Native Godot are not distributed on npm. Instead, they are downloaded separately by issuing the following command:
+The LibGodot packages used by React Native Godot are not distributed on npm. The package downloads and verifies them automatically during installation.
+
+To repeat the download manually, for example after setting local LibGodot override paths, run:
 
 ```sh
 yarn download-prebuilt
 ```
 
-This way React Native Godot can be updated independently from LibGodot, and also local, customized builds of LibGodot are supported.
+This keeps React Native Godot independent from LibGodot releases while still supporting local customized builds.
 
 On Expo, the package config plugin derives the downloaded LibGodot Maven repository from its installed location and writes `android.extraMavenRepos` automatically. Do not add that property or an `expo-build-properties` entry manually. The generated path works with hoisted dependencies, workspaces and regular `node_modules` layouts; React Native Community CLI builds retain the native Gradle fallback.
 
