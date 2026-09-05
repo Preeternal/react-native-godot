@@ -156,7 +156,9 @@ buildscript {
 apply plugin: 'com.android.library'
 apply from: "./fix-prefab.gradle"
 apply plugin: 'com.facebook.react'
-apply plugin: "org.jetbrains.kotlin.android"
+if (project.extensions.findByName('kotlin') == null) {
+    apply plugin: "org.jetbrains.kotlin.android"
+}
 
 
 android {
