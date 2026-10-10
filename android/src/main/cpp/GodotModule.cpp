@@ -53,13 +53,14 @@ const static char CMD_FUNCTION = 1;
 const static char CMD_EXIT = 2;
 
 class AndroidThread {
-	std::thread thread;
 	std::mutex mutex;
 	std::condition_variable started;
 	std::queue<std::function<void()>> tasks;
 	ALooper *looper = nullptr;
 	int function_queue_fd = -1;
 	bool quit = false;
+	// Keep the worker last so run() cannot access fields before their initialization.
+	std::thread thread;
 
 public:
 	AndroidThread() :
