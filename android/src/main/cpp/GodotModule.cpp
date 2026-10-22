@@ -197,6 +197,8 @@ struct AndroidPlatformData : PlatformData {
 	std::map<void *, std::string> handleToWindowName;
 	bool in_background = false;
 	bool paused = false;
+	// Guarded by GodotModule::_mutex; kept pending across pause/resume until consumed.
+	bool frameCallbackPending = false;
 	AndroidThread thread;
 	std::mutex windowUpdateMutex;
 	std::mutex createMutex;
@@ -260,16 +262,7 @@ static void postFrameCallback(AChoreographer *choreographer, void *data) {
 
 static void handleFrameCallback(void *data) {
 	GodotModule *self = (GodotModule *)data;
-	if (!self->is_paused()) {
-		godot::GodotInstance *instance = self->get_instance();
-		if (!instance) {
-			return;
-		} else if (instance->is_started()) {
-			instance->iteration();
-		}
-		AChoreographer *choreographer = AChoreographer_getInstance();
-		postFrameCallback(choreographer, data);
-	}
+	self->iterate();
 }
 
 godot::GodotInstance *GodotModule::get_or_create_instance(std::vector<std::string> args) {
@@ -373,10 +366,7 @@ godot::GodotInstance *GodotModule::get_or_create_instance(std::vector<std::strin
 
 	godot::DisplayServerEmbedded::set_native_surface(nativeSurface);
 
-	if (instance->start()) {
-		AChoreographer *choreographer = AChoreographer_getInstance();
-		postFrameCallback(choreographer, this);
-	}
+	instance->start();
 
 	{
 		std::lock_guard lock(_mutex);
@@ -389,6 +379,7 @@ godot::GodotInstance *GodotModule::get_or_create_instance(std::vector<std::strin
 		_instance = instance;
 	}
 
+	updateState();
 	updateWindows(true);
 
 	return instance;
@@ -472,9 +463,11 @@ godot::Ref<godot::RenderingNativeSurface> GodotModule::get_main_rendering_surfac
 	return data->mainSurface;
 }
 void GodotModule::focus_out() {
-	std::lock_guard lock(_mutex);
 	AndroidPlatformData *data = static_cast<AndroidPlatformData *>(_data);
-	data->in_background = true;
+	{
+		std::lock_guard lock(_mutex);
+		data->in_background = true;
+	}
 	data->thread.enqueue([this]() {
 		std::lock_guard lock(_mutex);
 		if (_instance) {
@@ -485,9 +478,11 @@ void GodotModule::focus_out() {
 }
 
 void GodotModule::focus_in() {
-	std::lock_guard lock(_mutex);
 	AndroidPlatformData *data = static_cast<AndroidPlatformData *>(_data);
-	data->in_background = false;
+	{
+		std::lock_guard lock(_mutex);
+		data->in_background = false;
+	}
 	data->thread.enqueue([this]() {
 		std::lock_guard lock(_mutex);
 		if (_instance) {
@@ -504,9 +499,11 @@ bool GodotModule::is_paused() {
 }
 
 void GodotModule::appPause() {
-	std::lock_guard lock(_mutex);
 	AndroidPlatformData *data = static_cast<AndroidPlatformData *>(_data);
-	data->in_background = true;
+	{
+		std::lock_guard lock(_mutex);
+		data->in_background = true;
+	}
 	data->thread.enqueue([this]() {
 		std::lock_guard lock(_mutex);
 		if (_instance) {
@@ -517,8 +514,11 @@ void GodotModule::appPause() {
 }
 
 void GodotModule::appResume() {
-	std::lock_guard lock(_mutex);
 	AndroidPlatformData *data = static_cast<AndroidPlatformData *>(_data);
+	{
+		std::lock_guard lock(_mutex);
+		data->in_background = false;
+	}
 	data->thread.enqueue([this]() {
 		std::lock_guard lock(_mutex);
 		if (_instance) {
@@ -529,30 +529,36 @@ void GodotModule::appResume() {
 }
 
 void GodotModule::pause() {
-	std::lock_guard lock(_mutex);
 	AndroidPlatformData *data = static_cast<AndroidPlatformData *>(_data);
-	data->paused = true;
+	{
+		std::lock_guard lock(_mutex);
+		data->paused = true;
+	}
 	updateState();
 }
 
 void GodotModule::resume() {
-	std::lock_guard lock(_mutex);
 	AndroidPlatformData *data = static_cast<AndroidPlatformData *>(_data);
-	data->paused = false;
+	{
+		std::lock_guard lock(_mutex);
+		data->paused = false;
+	}
 	updateState();
 }
 
 void GodotModule::updateState() {
 	AndroidPlatformData *data = static_cast<AndroidPlatformData *>(_data);
-	if (data->in_background || data->paused) {
-		// Nothing to do, frameCallback will not do anything if it is paused
-	} else {
-		// Register the frame callback again
-		data->thread.enqueue([this]() {
-			AChoreographer *choreographer = AChoreographer_getInstance();
-			postFrameCallback(choreographer, this);
-		});
-	}
+	data->thread.enqueue([this, data]() {
+		std::lock_guard lock(_mutex);
+		if (!_instance || !_instance->is_started() || data->in_background ||
+				data->paused || data->frameCallbackPending) {
+			return;
+		}
+
+		data->frameCallbackPending = true;
+		AChoreographer *choreographer = AChoreographer_getInstance();
+		postFrameCallback(choreographer, this);
+	});
 }
 
 class CPPCallable : public godot::CallableCustom {
@@ -680,12 +686,18 @@ void GodotModule::runOnGodotThread(std::function<void()> f, bool wait) {
 }
 
 void GodotModule::iterate() {
+	AndroidPlatformData *data = static_cast<AndroidPlatformData *>(_data);
 	godot::GodotInstance *instance = nullptr;
 	{
 		std::lock_guard lock(_mutex);
+		data->frameCallbackPending = false;
+		if (data->in_background || data->paused) {
+			return;
+		}
 		instance = _instance;
 	}
 	if (instance && instance->is_started()) {
 		instance->iteration();
+		updateState();
 	}
 }
