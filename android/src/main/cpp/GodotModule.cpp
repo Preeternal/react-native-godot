@@ -195,7 +195,8 @@ struct AndroidPlatformData : PlatformData {
 	double contentScaleFactor = 1.0;
 	std::map<std::string, WindowFuncData> windowUpdateCallbacks;
 	std::map<void *, std::string> handleToWindowName;
-	bool in_background = false;
+	// No frames until React Native reports an active host. This does not start Godot.
+	bool in_background = true;
 	bool paused = false;
 	// Guarded by GodotModule::_mutex; kept pending across pause/resume until consumed.
 	bool frameCallbackPending = false;
@@ -367,6 +368,7 @@ godot::GodotInstance *GodotModule::get_or_create_instance(std::vector<std::strin
 	godot::DisplayServerEmbedded::set_native_surface(nativeSurface);
 
 	instance->start();
+	bool inBackground;
 
 	{
 		std::lock_guard lock(_mutex);
@@ -377,8 +379,13 @@ godot::GodotInstance *GodotModule::get_or_create_instance(std::vector<std::strin
 		data->handle = handle;
 
 		_instance = instance;
+		inBackground = data->in_background;
 	}
 
+	if (inBackground) {
+		instance->focus_out();
+		instance->pause();
+	}
 	updateState();
 	updateWindows(true);
 
@@ -502,12 +509,16 @@ void GodotModule::appPause() {
 	AndroidPlatformData *data = static_cast<AndroidPlatformData *>(_data);
 	{
 		std::lock_guard lock(_mutex);
+		if (data->in_background) {
+			return;
+		}
 		data->in_background = true;
 	}
 	data->thread.enqueue([this]() {
-		std::lock_guard lock(_mutex);
-		if (_instance) {
-			_instance->pause();
+		godot::GodotInstance *instance = get_instance();
+		if (instance) {
+			instance->focus_out();
+			instance->pause();
 		}
 	});
 	updateState();
@@ -517,12 +528,16 @@ void GodotModule::appResume() {
 	AndroidPlatformData *data = static_cast<AndroidPlatformData *>(_data);
 	{
 		std::lock_guard lock(_mutex);
+		if (!data->in_background) {
+			return;
+		}
 		data->in_background = false;
 	}
 	data->thread.enqueue([this]() {
-		std::lock_guard lock(_mutex);
-		if (_instance) {
-			_instance->resume();
+		godot::GodotInstance *instance = get_instance();
+		if (instance) {
+			instance->resume();
+			instance->focus_in();
 		}
 	});
 	updateState();

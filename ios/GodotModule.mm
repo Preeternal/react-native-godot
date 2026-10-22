@@ -163,7 +163,7 @@ struct ApplePlatformData : PlatformData {
 	godot::Ref<godot::RenderingNativeSurface> mainSurface;
 	CGFloat contentScaleFactor = 1.0;
 	CADisplayLink *displayLink = nullptr;
-	bool in_background = false;
+	bool in_background = true;
 	bool paused = false;
 	void *handle = nullptr;
 	libgodot_create_godot_instance_type func_libgodot_create_godot_instance = nullptr;
@@ -184,6 +184,35 @@ struct ApplePlatformData : PlatformData {
 GodotModule *GodotModule::get_singleton() {
 	static GodotModule *singleton = new GodotModule(new ApplePlatformData());
 	return singleton;
+}
+
+// The engine/module is process-wide, so these observers survive JS reloads too.
+static void observeApplicationLifecycle(GodotModule *module) {
+	static dispatch_once_t once;
+	dispatch_once(&once, ^{
+		void (^install)(void) = ^{
+			NSNotificationCenter *center = [NSNotificationCenter defaultCenter];
+			static NSArray *observers;
+			observers = @[
+				[center addObserverForName:UIApplicationWillResignActiveNotification
+								   object:nil queue:[NSOperationQueue mainQueue]
+							   usingBlock:^(NSNotification *notification) { module->appPause(); }],
+				[center addObserverForName:UIApplicationDidBecomeActiveNotification
+								   object:nil queue:[NSOperationQueue mainQueue]
+							   usingBlock:^(NSNotification *notification) { module->appResume(); }]
+			];
+			if ([UIApplication sharedApplication].applicationState == UIApplicationStateActive) {
+				module->appResume();
+			} else {
+				module->appPause();
+			}
+		};
+		if ([NSThread isMainThread]) {
+			install();
+		} else {
+			dispatch_sync(dispatch_get_main_queue(), install);
+		}
+	});
 }
 
 extern "C" {
@@ -228,6 +257,8 @@ godot::GodotInstance *GodotModule::get_or_create_instance(std::vector<std::strin
 			return _instance;
 		}
 	}
+
+	observeApplicationLifecycle(this);
 
 	void *handle = nullptr;
 	if (data->func_libgodot_create_godot_instance == nullptr) {
@@ -299,23 +330,24 @@ godot::GodotInstance *GodotModule::get_or_create_instance(std::vector<std::strin
 	godot::DisplayServerEmbedded::set_native_surface(nativeSurface);
 
 	instance->start();
+	bool inBackground;
 
 	{
 		std::lock_guard lock(_mutex);
 
-		data->displayLink = [CADisplayLink displayLinkWithTarget:data->thread
-												selector:@selector(step:)];
-		configureGodotDisplayLink(data->displayLink);
-		[data->displayLink addToRunLoop:[NSRunLoop currentRunLoop]
-								forMode:NSRunLoopCommonModes];
 		data->mainWindowLayer = mainWindowLayer;
 		data->mainSurface = nativeSurface;
 		data->contentScaleFactor = contentScaleFactor;
 		data->handle = handle;
 
 		_instance = instance;
+		inBackground = data->in_background;
 	}
 
+	if (inBackground) {
+		instance->pause();
+	}
+	updateState();
 	updateWindows(true);
 
 	return instance;
@@ -439,14 +471,17 @@ bool GodotModule::is_paused() {
 void GodotModule::appPause() {
 	std::lock_guard lock(_mutex);
 	ApplePlatformData *data = static_cast<ApplePlatformData *>(_data);
+	if (data->in_background) {
+		return;
+	}
 	UIBackgroundTaskIdentifier bgTask = [[UIApplication sharedApplication] beginBackgroundTaskWithExpirationHandler:^{
 
 	}];
 	data->in_background = true;
 	[data->thread scheduleBlock:^{
-		std::lock_guard lock(_mutex);
-		if (_instance) {
-			_instance->pause();
+		godot::GodotInstance *instance = get_instance();
+		if (instance) {
+			instance->pause();
 		}
 		[[UIApplication sharedApplication] endBackgroundTask:bgTask];
 	}];
@@ -456,11 +491,14 @@ void GodotModule::appPause() {
 void GodotModule::appResume() {
 	std::lock_guard lock(_mutex);
 	ApplePlatformData *data = static_cast<ApplePlatformData *>(_data);
+	if (!data->in_background) {
+		return;
+	}
 	data->in_background = false;
 	[data->thread scheduleBlock:^{
-		std::lock_guard lock(_mutex);
-		if (_instance) {
-			_instance->resume();
+		godot::GodotInstance *instance = get_instance();
+		if (instance) {
+			instance->resume();
 		}
 	}];
 	updateState();

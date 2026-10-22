@@ -49,6 +49,7 @@ private:
 	jsi::Runtime *rnRuntime_;
 	std::shared_ptr<facebook::react::CallInvoker> callInvoker_;
 	bool installTurboModule();
+	void setHostActive(jboolean active);
 
 	explicit NativeGodotModuleJNI(
 			jni::alias_ref<NativeGodotModuleJNI::jhybridobject> jThis,

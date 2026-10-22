@@ -25,6 +25,7 @@
 
 #include "native_godot_module_jni.h"
 #include <NativeGodotModule.h>
+#include "GodotModule.h"
 
 #define LOG_TAG "NativeGodotModuleJNI"
 #include "godot-log.h"
@@ -45,7 +46,17 @@ void NativeGodotModuleJNI::registerNatives() {
 	registerHybrid({
 			makeNativeMethod("initHybrid", NativeGodotModuleJNI::initHybrid),
 			makeNativeMethod("installTurboModule", NativeGodotModuleJNI::installTurboModule),
+			makeNativeMethod("setHostActive", NativeGodotModuleJNI::setHostActive),
 	});
+}
+
+void NativeGodotModuleJNI::setHostActive(jboolean active) {
+	GodotModule *module = GodotModule::get_singleton();
+	if (active) {
+		module->appResume();
+	} else {
+		module->appPause();
+	}
 }
 
 bool NativeGodotModuleJNI::installTurboModule() {
