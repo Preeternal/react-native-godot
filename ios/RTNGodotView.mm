@@ -142,6 +142,9 @@ static __weak UIView *_currentView = nil;
 
 - (instancetype)init {
 	if (self = [super init]) {
+		// Fabric requires the component's own default props before the first update.
+		static const auto defaultProps = std::make_shared<const RTNGodotViewProps>();
+		_props = defaultProps;
 		[self setDefaultValues];
 	}
 	return self;

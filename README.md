@@ -115,6 +115,8 @@ Just follow these steps to add it to your React Native application:
 
 The current example is aligned with Expo SDK 57, React Native 0.86 and React 19.2. Node.js follows React Native's supported ranges (`^20.19.4`, `^22.13.0`, `^24.3.0` or `>=25`); this repository uses Node.js 22.13 as its development baseline. The example uses the New Architecture, Hermes and `react-native-worklets` 0.10, which is the Worklets version selected by Expo SDK 57.
 
+On iOS, `RTNGodotView` initializes Fabric's `_props` with generated `RTNGodotViewProps` defaults before the first prop update. This satisfies the Fabric subclass contract checked by React Native 0.88.1, using APIs available in earlier Fabric versions without a version-specific branch.
+
 Expo monorepos are supported through Expo's automatic Metro configuration. Keep the example/app package inside the workspace list and base its Metro configuration on `expo/metro-config`; custom `watchFolders`, `resolver.nodeModulesPaths` and `disableHierarchicalLookup` settings are not required on Expo SDK 52 or newer. In this repository the library itself is the workspace root, so the example links it with Yarn's `portal:../` protocol.
 
 The Android integration requires Android 10 (API 29) because window embedding uses `SurfaceControl`. The bundled Godot binaries currently support `armeabi-v7a` and `arm64-v8a`; the example restricts `reactNativeArchitectures` to those ABIs so its APK never advertises an x86 variant that cannot load Godot.
