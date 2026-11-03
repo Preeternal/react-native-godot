@@ -162,12 +162,12 @@ if (project.extensions.findByName('kotlin') == null) {
 
 
 android {
-  compileSdkVersion safeExtGet('compileSdkVersion', 33)
-  namespace "com.rtngodot"
+  compileSdk = safeExtGet('compileSdkVersion', 33)
+  namespace = "com.rtngodot"
 
   buildFeatures {
-    prefab true
-    prefabPublishing true
+    prefab = true
+    prefabPublishing = true
   }
 
   // If it doesn't exist
@@ -185,10 +185,10 @@ android {
   defaultConfig {
     // SurfaceControl is the foundation of the embedded window implementation
     // and is only available from Android 10 (API 29).
-    minSdkVersion 29
-    targetSdkVersion safeExtGet('targetSdkVersion', 33)
-    ndkVersion safeExtGet('ndkVersion', "26.1.10909125")
-    consumerProguardFiles "consumer-rules.pro"
+    minSdk = 29
+    targetSdk = safeExtGet('targetSdkVersion', 33)
+    ndkVersion = safeExtGet('ndkVersion', "26.1.10909125")
+    consumerProguardFiles("consumer-rules.pro")
     ndk {
       // Specifies the ABI configurations of your native
       // libraries Gradle should build and package with your app.

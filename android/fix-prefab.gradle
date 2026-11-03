@@ -31,11 +31,13 @@ afterEvaluate {
       return
     }
 
-    def variants = proj.android.hasProperty('applicationVariants') ? proj.android.applicationVariants : proj.android.libraryVariants
+    def androidComponents = proj.extensions.findByName('androidComponents')
+    if (androidComponents == null) return
+
     // Touch the prefab_config.json files to ensure that in ExternalNativeJsonGenerator.kt we will re-trigger the prefab CLI to
     // generate a libnameConfig.cmake file that will contain our native library (.so).
     // See this condition: https://cs.android.com/android-studio/platform/tools/base/+/mirror-goog-studio-main:build-system/gradle-core/src/main/java/com/android/build/gradle/tasks/ExternalNativeJsonGenerator.kt;l=207-219?q=createPrefabBuildSystemGlue
-    variants.all { variant ->
+    androidComponents.onVariants(androidComponents.selector().all()) { variant ->
       def variantName = variant.name
       abis.each { abi ->
         def searchDir = new File(proj.projectDir, ".cxx/${variantName}")
