@@ -177,7 +177,7 @@ android {
 
   prefab {
     rtngodot {
-        headers prefabHeadersDir.absolutePath
+        headers = prefabHeadersDir.absolutePath
     }
   }
 

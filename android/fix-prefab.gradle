@@ -20,8 +20,8 @@ afterEvaluate {
   rootProject.allprojects.each { proj ->
     if (proj === rootProject) return
 
-    def dependsOnThisLib = proj.configurations.findAll { it.canBeResolved }.any { config ->
-      config.dependencies.any { dep ->
+    def dependsOnThisLib = proj.configurations.any { config ->
+      config.canBeResolved && config.dependencies.any { dep ->
         dep.group == project.group && dep.name == project.name
       }
     }
