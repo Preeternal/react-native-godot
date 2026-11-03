@@ -149,16 +149,12 @@ buildscript {
   }
   dependencies {
     classpath("com.android.tools.build:gradle:8.2.1")
-    classpath "org.jetbrains.kotlin:kotlin-gradle-plugin:$kotlinVersion"
   }
 }
 
 apply plugin: 'com.android.library'
 apply from: "./fix-prefab.gradle"
 apply plugin: 'com.facebook.react'
-if (project.extensions.findByName('kotlin') == null) {
-    apply plugin: "org.jetbrains.kotlin.android"
-}
 
 
 android {
