@@ -16,9 +16,6 @@
   npm package.
 - Added compatibility with React Native 0.88, React 19.3, the New
   Architecture, Hermes and `react-native-worklets` 0.13.
-- Replaced the legacy filesystem package with
-  `@dr.pogodin/react-native-fs` and updated the example navigation stack and
-  other runtime dependencies.
 
 ### Fixes
 
