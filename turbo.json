@@ -1,0 +1,56 @@
+{
+  "$schema": "https://turbo.build/schema.json",
+  "globalDependencies": [".nvmrc", ".yarnrc.yml", ".yarn/patches/**"],
+  "globalEnv": ["NODE_ENV"],
+  "tasks": {
+    "build:android": {
+      "env": ["ANDROID_HOME"],
+      "inputs": [
+        "$TURBO_ROOT$/package.json",
+        "$TURBO_ROOT$/react-native.config.js",
+        "$TURBO_ROOT$/android/**",
+        "!$TURBO_ROOT$/android/build/**",
+        "!$TURBO_ROOT$/android/.cxx/**",
+        "!$TURBO_ROOT$/android/.gradle/**",
+        "!$TURBO_ROOT$/android/libs/**",
+        "!$TURBO_ROOT$/android/local.properties",
+        "$TURBO_ROOT$/cpp/**",
+        "$TURBO_ROOT$/src/**",
+        "$TURBO_ROOT$/example/package.json",
+        "$TURBO_ROOT$/example/android/**",
+        "!$TURBO_ROOT$/example/android/.gradle/**",
+        "!$TURBO_ROOT$/example/android/**/.cxx/**",
+        "!$TURBO_ROOT$/example/android/.kotlin/**",
+        "!$TURBO_ROOT$/example/android/local.properties",
+        "!$TURBO_ROOT$/example/android/build/**",
+        "!$TURBO_ROOT$/example/android/app/build/**"
+      ],
+      "outputs": []
+    },
+    "build:ios": {
+      "env": [
+        "RCT_REMOVE_LEGACY_ARCH",
+        "RCT_USE_RN_DEP",
+        "RCT_USE_PREBUILT_RNCORE"
+      ],
+      "inputs": [
+        "$TURBO_ROOT$/package.json",
+        "$TURBO_ROOT$/*.podspec",
+        "$TURBO_ROOT$/ios/**",
+        "!$TURBO_ROOT$/ios/libs/**",
+        "!$TURBO_ROOT$/ios/build/**",
+        "$TURBO_ROOT$/cpp/**",
+        "$TURBO_ROOT$/src/**",
+        "$TURBO_ROOT$/example/package.json",
+        "$TURBO_ROOT$/example/ios/**",
+        "!$TURBO_ROOT$/example/ios/build/**",
+        "!$TURBO_ROOT$/example/ios/Pods/**",
+        "!$TURBO_ROOT$/example/ios/.xcode.env.local",
+        "$TURBO_ROOT$/Package.swift",
+        "$TURBO_ROOT$/react-native.config.js",
+        "$TURBO_ROOT$/prebuilt-utils.rb"
+      ],
+      "outputs": []
+    }
+  }
+}

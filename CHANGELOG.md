@@ -4,14 +4,21 @@
 
 ### Features
 
-- Expo and monorepo support now resolves React Native from the package's actual
-  location. The Expo config plugin applies the required Android settings and
-  locates the downloaded LibGodot repository automatically.
+- Migrated the package to the `create-react-native-library` 0.64.0 Turbo
+  Module template and its React Native 0.88 tooling.
+- Added a Swift Package Manager manifest for iOS integrations, including the
+  LibGodot and React Native header dependencies used by the native targets.
+- Expo Dev Builds remain supported through the package config plugin. The
+  example itself is now the current React Native Community CLI template rather
+  than an old Expo example.
 - Package installation downloads and verifies the prebuilt LibGodot
   `4.5.1.preeternal.1` artifacts on demand instead of shipping them inside the
   npm package.
-- Added compatibility with Expo SDK 57, React Native 0.86, React 19, the New
-  Architecture, and `react-native-worklets`.
+- Added compatibility with React Native 0.88, React 19.3, the New
+  Architecture, Hermes and `react-native-worklets` 0.13.
+- Replaced the legacy filesystem package with
+  `@dr.pogodin/react-native-fs` and updated the example navigation stack and
+  other runtime dependencies.
 
 ### Fixes
 
@@ -23,9 +30,16 @@
   duplicate frame callbacks, and host pause/resume is forwarded without
   changing the preview's explicit pause state.
 - Fixed Fabric view initialization for React Native 0.88.
+- Kept hidden `.godot` export assets in Android application bundles so Godot
+  can load its exported scenes from `res://`; the Expo config plugin preserves
+  this setting across clean prebuilds.
+- Added the Android Worklets queue compatibility patch required by the custom
+  Godot runtime queue on React Native 0.88.
 
 ### Breaking changes
 
+- Consumers migrating from the original package must update the dependency and
+  imports to `@preeternal/react-native-godot`.
 - `react-native-worklets` replaces `react-native-worklets-core`. Consumers must
   install and configure the Worklets package.
 - Android support now requires Android 10 (API 29) or newer and the supported
@@ -39,7 +53,14 @@
 
 ### Maintenance
 
-- Modernized the Android Gradle integration by removing deprecated Gradle APIs,
-  late prefab callbacks, and the unused Kotlin plugin.
+- Migrated Android native modules and the Fabric view from Java to Kotlin while
+  preserving the existing native module names and generated interfaces.
+- Updated the iOS native layout for the modern template and added Swift
+  Package Manager support while retaining the Objective-C++ bridge where C++
+  interop is required.
+- Modernized the Android Gradle integration by removing deprecated Gradle APIs
+  and late prefab callbacks.
+- Updated the package tooling, TypeScript build, linting, tests and npm archive
+  layout to the current template generation.
 
 ---

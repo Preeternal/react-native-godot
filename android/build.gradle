@@ -153,13 +153,16 @@ buildscript {
 }
 
 apply plugin: 'com.android.library'
+if (project.extensions.findByName('kotlin') == null) {
+  apply plugin: 'kotlin-android'
+}
 apply from: "./fix-prefab.gradle"
 apply plugin: 'com.facebook.react'
 
 
 android {
   compileSdk = safeExtGet('compileSdkVersion', 33)
-  namespace = "com.rtngodot"
+  namespace = "com.preeternal.reactnativegodot"
 
   buildFeatures {
     prefab = true

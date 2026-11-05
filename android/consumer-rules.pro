@@ -1,7 +1,7 @@
 # The embedded Godot engine calls these Java APIs through JNI. R8 cannot see
 # those calls and would otherwise remove or rename the entry points.
--keep,allowoptimization class com.rtngodot.NativeGodotModule { *; }
--keep,allowoptimization class com.rtngodot.RTNLibGodot { *; }
+-keep,allowoptimization class com.preeternal.reactnativegodot.NativeGodotModuleModule { *; }
+-keep,allowoptimization class com.preeternal.reactnativegodot.RTNLibGodot { *; }
 
 -keep,allowoptimization class org.godotengine.godot.Dictionary { *; }
 -keep,allowoptimization class org.godotengine.godot.Godot { *; }

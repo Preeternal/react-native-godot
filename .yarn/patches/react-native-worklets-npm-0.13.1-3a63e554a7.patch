@@ -1,0 +1,13 @@
+diff --git a/Common/cpp/worklets/NativeModules/JSIWorkletsModuleProxy.cpp b/Common/cpp/worklets/NativeModules/JSIWorkletsModuleProxy.cpp
+--- a/Common/cpp/worklets/NativeModules/JSIWorkletsModuleProxy.cpp
++++ b/Common/cpp/worklets/NativeModules/JSIWorkletsModuleProxy.cpp
+@@ -175,6 +175,8 @@ inline std::shared_ptr<AsyncQueue> extractAsyncQueue(jsi::Runtime &rt, const jsi::Value &value) {
+ 
+   const auto &nativeState = object.getNativeState(rt);
+-  auto asyncQueue = std::dynamic_pointer_cast<AsyncQueue>(nativeState);
++  // The custom Godot queue is created in another shared library. RTTI can
++  // fail to identify the same public base type across that boundary.
++  auto asyncQueue = std::static_pointer_cast<AsyncQueue>(nativeState);
+ 
+   return asyncQueue;
+ }
