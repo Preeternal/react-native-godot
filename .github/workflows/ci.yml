@@ -67,6 +67,141 @@ jobs:
       - name: Build package
         run: yarn prepare
 
+  expo-prebuild:
+    runs-on: ubuntu-latest
+
+    env:
+      EXPO_WORK_DIR: ${{ github.workspace }}/.tmp/expo-prebuild
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          lfs: true
+
+      - name: Setup
+        uses: ./.github/actions/setup
+
+      - name: Expo prebuild smoke test
+        run: |
+          set -euo pipefail
+
+          rm -rf "$EXPO_WORK_DIR"
+          mkdir -p "$EXPO_WORK_DIR"
+
+          yarn prepare
+          npm pack --silent --ignore-scripts \
+            --pack-destination "$EXPO_WORK_DIR" \
+            > "$EXPO_WORK_DIR/npm-pack.log"
+          PACKAGE_TGZ="$(find "$EXPO_WORK_DIR" -maxdepth 1 -type f \
+            -name '*.tgz' -print -quit)"
+          test -n "$PACKAGE_TGZ"
+
+          npx --yes create-expo-app@latest "$EXPO_WORK_DIR/app" \
+            --template blank-typescript --yes --no-install
+
+          mkdir -p "$EXPO_WORK_DIR/app/assets"
+          cp "$GITHUB_WORKSPACE/example/ios/GodotTest.pck" \
+            "$EXPO_WORK_DIR/app/assets/GodotTest.pck"
+
+          cd "$EXPO_WORK_DIR/app"
+          npm install
+          npm install "$PACKAGE_TGZ" 2>&1 \
+            | tee "$EXPO_WORK_DIR/package-install.log"
+
+          node "$GITHUB_WORKSPACE/scripts/ci/verify-prebuilt-install.cjs" \
+            "$EXPO_WORK_DIR/app/node_modules/@preeternal/react-native-godot"
+
+          node <<'NODE'
+          const fs = require('node:fs');
+
+          const app = JSON.parse(fs.readFileSync('app.json', 'utf8'));
+          app.expo = app.expo || {};
+          app.expo.plugins = [
+            [
+              '@preeternal/react-native-godot',
+              { iosPacks: ['./assets/GodotTest.pck'] },
+            ],
+          ];
+          fs.writeFileSync('app.json', JSON.stringify(app, null, 2) + '\n');
+          NODE
+
+          CI=1 npx expo config --json \
+            > "$EXPO_WORK_DIR/expo-config.json" \
+            2> "$EXPO_WORK_DIR/expo-config.stderr.log"
+          node -e \
+            "JSON.parse(require('node:fs').readFileSync(process.argv[1], 'utf8'))" \
+            "$EXPO_WORK_DIR/expo-config.json"
+
+          CI=1 npx expo prebuild --platform all --clean --no-install 2>&1 \
+            | tee "$EXPO_WORK_DIR/prebuild.log"
+
+          grep -Fx 'android.minSdkVersion=29' android/gradle.properties
+          grep -Fx 'reactNativeArchitectures=armeabi-v7a,arm64-v8a' \
+            android/gradle.properties
+          grep -F 'libgodot-android' android/gradle.properties
+          grep -F 'react-native-godot-assets' android/app/build.gradle
+
+          PBXPROJ="$(find ios -name '*.pbxproj' -print -quit)"
+          test -n "$PBXPROJ"
+          grep -F 'GodotTest.pck' "$PBXPROJ"
+
+      - name: Print Expo prebuild diagnostics
+        if: always()
+        run: |
+          set -euo pipefail
+
+          echo '::group::package install log'
+          if [[ -f "$EXPO_WORK_DIR/package-install.log" ]]; then
+            cat "$EXPO_WORK_DIR/package-install.log"
+          else
+            echo "Missing: $EXPO_WORK_DIR/package-install.log"
+          fi
+          echo '::endgroup::'
+
+          echo '::group::expo config'
+          if [[ -f "$EXPO_WORK_DIR/expo-config.json" ]]; then
+            cat "$EXPO_WORK_DIR/expo-config.json"
+          else
+            echo "Missing: $EXPO_WORK_DIR/expo-config.json"
+          fi
+          echo '::endgroup::'
+
+          echo '::group::expo config stderr'
+          if [[ -f "$EXPO_WORK_DIR/expo-config.stderr.log" ]]; then
+            cat "$EXPO_WORK_DIR/expo-config.stderr.log"
+          else
+            echo "Missing: $EXPO_WORK_DIR/expo-config.stderr.log"
+          fi
+          echo '::endgroup::'
+
+          echo '::group::prebuild log'
+          if [[ -f "$EXPO_WORK_DIR/prebuild.log" ]]; then
+            cat "$EXPO_WORK_DIR/prebuild.log"
+          else
+            echo "Missing: $EXPO_WORK_DIR/prebuild.log"
+          fi
+          echo '::endgroup::'
+
+      - name: Upload Expo prebuild diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: expo-prebuild-diagnostics
+          if-no-files-found: warn
+          path: |
+            ${{ env.EXPO_WORK_DIR }}/package-install.log
+            ${{ env.EXPO_WORK_DIR }}/app/app.json
+            ${{ env.EXPO_WORK_DIR }}/expo-config.json
+            ${{ env.EXPO_WORK_DIR }}/expo-config.stderr.log
+            ${{ env.EXPO_WORK_DIR }}/prebuild.log
+            ${{ env.EXPO_WORK_DIR }}/app/android/gradle.properties
+            ${{ env.EXPO_WORK_DIR }}/app/android/app/build.gradle
+
+      - name: Cleanup Expo prebuild workspace
+        if: always()
+        run: rm -rf "$EXPO_WORK_DIR"
+
   build-android:
     runs-on: ubuntu-latest
 
