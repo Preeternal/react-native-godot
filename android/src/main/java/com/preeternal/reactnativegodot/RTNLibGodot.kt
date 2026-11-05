@@ -301,10 +301,6 @@ class RTNLibGodot private constructor() : IGodotLib, GodotHost, GodotRenderView 
     private var inited = false
     private var hostActivity: Activity? = null
 
-    init {
-      System.loadLibrary("rtngodot")
-    }
-
     private val INSTANCE = RTNLibGodot()
     private val windowData = HashMap<String, WindowSurfaceData>()
 

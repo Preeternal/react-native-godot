@@ -4011,7 +4011,7 @@ __metadata:
     react-native-monorepo-config: "npm:^0.4.0"
     react-native-safe-area-context: "npm:^5.11.1"
     react-native-screens: "npm:^4.30.1"
-    react-native-worklets: "patch:react-native-worklets@npm%3A0.13.1#~/.yarn/patches/react-native-worklets-npm-0.13.1-3a63e554a7.patch"
+    react-native-worklets: "npm:^0.13.1"
     typescript: "npm:^6.0.3"
   languageName: unknown
   linkType: soft
@@ -11363,7 +11363,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"react-native-worklets@npm:0.13.1":
+"react-native-worklets@npm:0.13.1, react-native-worklets@npm:^0.13.1":
   version: 0.13.1
   resolution: "react-native-worklets@npm:0.13.1"
   dependencies:

@@ -30,4 +30,12 @@ class NativeGodotModulePackage : BaseReactPackage() {
       ),
     )
   }
+
+  companion object {
+    init {
+      // Match the Java integration: load native dependencies when RN creates
+      // the package, before JavaScript requests the TurboModule.
+      System.loadLibrary("rtngodot")
+    }
+  }
 }

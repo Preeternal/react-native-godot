@@ -33,8 +33,6 @@
 - Kept hidden `.godot` export assets in Android application bundles so Godot
   can load its exported scenes from `res://`; the Expo config plugin preserves
   this setting across clean prebuilds.
-- Added the Android Worklets queue compatibility patch required by the custom
-  Godot runtime queue on React Native 0.88.
 
 ### Breaking changes
 
@@ -55,6 +53,8 @@
 
 - Migrated Android native modules and the Fabric view from Java to Kotlin while
   preserving the existing native module names and generated interfaces.
+- Kept the Java implementation's early native-library loading on Android,
+  since lazy loading triggers [Worklets issue #10922](https://github.com/software-mansion/react-native-reanimated/issues/10922).
 - Updated the iOS native layout for the modern template and added Swift
   Package Manager support while retaining the Objective-C++ bridge where C++
   interop is required.

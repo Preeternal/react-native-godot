@@ -192,56 +192,6 @@ yarn add @preeternal/react-native-godot @dr.pogodin/react-native-fs react-native
 
 For a React Native Community CLI project, the package is autolinked normally. Install CocoaPods after changing native dependencies and keep the Worklets Babel plugin enabled according to the `react-native-worklets` installation guide.
 
-## Known issues
-
-### Android custom runtime queue (Worklets 0.13.1)
-
-An Android integration using a custom `AsyncQueue` in a separate shared
-library can fail on the first Godot-thread call with `async queue is not set`
-and a native abort. See upstream
-[Worklets issue #10922](https://github.com/software-mansion/react-native-reanimated/issues/10922).
-
-This repository's example uses a local Yarn patch. **That patch is not
-automatically applied when another application installs this library.** Until
-an upstream fix is available, consumers using Worklets **0.13.1** can apply the
-following temporary workaround in
-`Common/cpp/worklets/NativeModules/JSIWorkletsModuleProxy.cpp`, inside
-`extractAsyncQueue`:
-
-```diff
--  auto asyncQueue = std::dynamic_pointer_cast<AsyncQueue>(nativeState);
-+  auto asyncQueue = std::static_pointer_cast<AsyncQueue>(nativeState);
-```
-
-This bypasses runtime type validation and assumes the supplied native state
-really implements `AsyncQueue`, as this library's queue does. It is a temporary
-workaround, not a general type-safe fix. Do not apply it to other Worklets
-versions without checking their implementation.
-
-With Yarn 4, run these commands in the **consuming app**:
-
-```sh
-yarn patch react-native-worklets@npm:0.13.1
-# Edit the file above inside the temporary directory printed by Yarn.
-yarn patch-commit -s /absolute/path/to/the/temporary/directory
-yarn install
-```
-
-Commit the generated `.yarn/patches` file, the package manifest changes and
-`yarn.lock`. Ensure `.yarn/patches` is not excluded by `.gitignore`.
-
-With npm, edit that file under `node_modules/react-native-worklets`, then:
-
-```sh
-npm install --save-dev patch-package
-npx patch-package react-native-worklets
-```
-
-Add `patch-package` to the app's `postinstall` script (append it if a script
-already exists), then commit `patches/`, `package.json` and `package-lock.json`.
-Rebuild and reinstall the native Android app after either method; restarting
-Metro alone does not rebuild `libworklets.so`.
-
 ## Prebuilt LibGodot packages
 
 The LibGodot packages used by React Native Godot are not distributed on npm. The package downloads and verifies them automatically during installation.

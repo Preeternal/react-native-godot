@@ -47,8 +47,6 @@ generated for the existing module and view names: `NativeGodotModule`
 - SwiftPM is an additional integration, modeled after the file-hash and
   cookie-manager manifests. It explicitly depends on RNWorklets; its package
   graph has been checked, but a full native SwiftPM build remains unverified.
-- The Worklets 0.13.1 patch remains a temporary workaround. See Known issues
-  in the README. The load-order experiment has not been performed.
 - Yarn is pinned through Corepack instead of checking in the template's Yarn
   executable. `.tool-versions` and `.nvmrc` use the same Node version.
 - The upstream MIT notice is retained with an additional notice for the fork.
@@ -56,7 +54,3 @@ generated for the existing module and view names: `NativeGodotModule`
   not adopted. GitHub issue creation remains open for reports and requests.
 - The old Python pre-commit configuration is removed: it referenced the
   deleted `.prettierrc`. Lefthook is the active hook manager.
-
-Local checks do not constitute a successful GitHub CI run or native SwiftPM
-acceptance. Existing simulator/device smoke results apply to the app builds
-that were actually run, not to every build configuration.
