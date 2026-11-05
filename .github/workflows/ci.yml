@@ -319,6 +319,9 @@ jobs:
         run: |
           yarn turbo run build:android --cache-dir="${{ env.TURBO_CACHE_DIR }}"
 
+      - name: Verify 16KB page alignment
+        run: bash scripts/check-16kb.sh
+
   build-ios:
     runs-on: macos-latest
 

@@ -25,7 +25,9 @@
         "!$TURBO_ROOT$/example/android/build/**",
         "!$TURBO_ROOT$/example/android/app/build/**"
       ],
-      "outputs": []
+      "outputs": [
+        "android/app/build/intermediates/stripped_native_libs/**/arm64-v8a/*.so"
+      ]
     },
     "build:ios": {
       "env": [
