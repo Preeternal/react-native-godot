@@ -26,6 +26,7 @@
 #define LOG_TAG "IOSLog"
 #include "godot-log.h"
 
+#include <Foundation/Foundation.h>
 #include <stdarg.h>
 
 void __ios_log_print(ios_LogPriority prio, const char *tag, ...) {

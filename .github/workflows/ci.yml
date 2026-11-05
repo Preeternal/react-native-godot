@@ -348,3 +348,95 @@ jobs:
           name: ios-build-log
           if-no-files-found: warn
           path: ${{ runner.temp }}/ios-build.log
+
+  build-ios-spm:
+    runs-on: macos-latest
+
+    env:
+      XCODE_VERSION: latest-stable
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          lfs: true
+
+      - name: Setup
+        uses: ./.github/actions/setup
+
+      - name: Use appropriate Xcode version
+        uses: maxim-lobanov/setup-xcode@ed7a3b1fda3918c0306d1b724322adc0b8cc0a90 # v1.7.0
+        with:
+          xcode-version: ${{ env.XCODE_VERSION }}
+
+      - name: Cache React Native SwiftPM artifacts
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/Library/Caches/ReactNative/spm-artifacts
+          key: ${{ runner.os }}-react-native-spm-${{ hashFiles('example/package.json', 'Package.swift', 'yarn.lock', '.yarn/patches/**') }}
+          restore-keys: |
+            ${{ runner.os }}-react-native-spm-
+
+      - name: Prepare SPM-compatible example
+        working-directory: example
+        run: |
+          node <<'NODE'
+          const fs = require('node:fs');
+
+          const packageJson = JSON.parse(fs.readFileSync('package.json', 'utf8'));
+          for (const dependency of [
+            '@dr.pogodin/react-native-fs',
+            'react-native-screens',
+          ]) {
+            delete packageJson.dependencies[dependency];
+          }
+          fs.writeFileSync('package.json', JSON.stringify(packageJson, null, 2) + '\n');
+          NODE
+
+      - name: Enable SwiftPM integration
+        working-directory: example
+        run: |
+          set -euo pipefail
+          bundle install
+          cd ios
+          bundle exec npx react-native spm --deintegrate
+          bundle exec npx react-native spm --yes
+
+      - name: Build example for iOS with SwiftPM
+        run: |
+          set -euo pipefail
+          IOS_BUILD_LOG="$RUNNER_TEMP/ios-spm-build.log"
+          if ! xcodebuild \
+            -project example/ios/RTNGodotViewExample.xcodeproj \
+            -scheme RTNGodotViewExample \
+            -configuration Debug \
+            -sdk iphonesimulator \
+            -destination 'generic/platform=iOS Simulator' \
+            -derivedDataPath example/ios/build/DerivedData \
+            COMPILER_INDEX_STORE_ENABLE=NO \
+            DISABLE_MANUAL_TARGET_ORDER_BUILD_WARNING=YES \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            build 2>&1 | tee "$IOS_BUILD_LOG"; then
+            echo '::group::First iOS SwiftPM errors'
+            grep -nE " error: |fatal error:|Command PhaseScriptExecution failed|No such file|cannot find type |Undefined symbols|ld: " \
+              "$IOS_BUILD_LOG" | head -n 80 || true
+            echo '::endgroup::'
+            exit 1
+          fi
+
+      - name: Verify podless SwiftPM integration
+        run: |
+          set -euo pipefail
+          test ! -d example/ios/Pods
+          test -f example/ios/RTNGodotViewExample.xcodeproj/.spm-injected.json
+          grep -q 'XCLocalSwiftPackageReference' \
+            example/ios/RTNGodotViewExample.xcodeproj/project.pbxproj
+
+      - name: Upload SwiftPM build log
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: ios-spm-build-log
+          if-no-files-found: warn
+          path: ${{ runner.temp }}/ios-spm-build.log
