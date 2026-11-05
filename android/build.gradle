@@ -272,6 +272,7 @@ dependencies {
   implementation 'com.facebook.react:react-native'
   implementation project(':react-native-worklets')
   api "com.migeran.libgodot:godot:${libGodotVersion}-SNAPSHOT"
+  testImplementation 'junit:junit:4.13.2'
 }
 
 task deleteCmakeCache() {

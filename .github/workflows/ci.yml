@@ -52,6 +52,44 @@ jobs:
       - name: Run unit tests
         run: yarn test --maxWorkers=2 --coverage
 
+  test-android-jvm:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          lfs: true
+
+      - name: Setup
+        uses: ./.github/actions/setup
+
+      - name: Install JDK
+        uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074e1ad # v6.1.0
+        with:
+          distribution: 'zulu'
+          java-version: '21'
+
+      - name: Finalize Android SDK
+        run: |
+          /bin/bash -c "yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses > /dev/null"
+
+      - name: Cache Gradle
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            ~/.gradle/wrapper
+            ~/.gradle/caches
+          key: ${{ runner.os }}-gradle-jvm-tests-${{ hashFiles('example/android/gradle/wrapper/gradle-wrapper.properties', 'yarn.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-gradle-jvm-tests-
+            ${{ runner.os }}-gradle-
+
+      - name: Run Android JVM unit tests
+        working-directory: example/android
+        run: |
+          ./gradlew :preeternal_react-native-godot:testDebugUnitTest --no-daemon --console=plain
+
   build-library:
     runs-on: ubuntu-latest
 
