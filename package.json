@@ -48,6 +48,7 @@
     "prepare": "bob build",
     "postinstall": "node scripts/download-prebuilt.js",
     "download-prebuilt": "node scripts/download-prebuilt.js",
+    "check:packaged-artifacts": "bash scripts/check-packaged-artifacts.sh",
     "typecheck": "tsc",
     "test": "node --test scripts/__tests__/*.test.cjs && jest --passWithNoTests",
     "release": "release-it --only-version",
