@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+First release of the maintained fork of the original
+[@borndotcom/react-native-godot](https://github.com/borndotcom/react-native-godot), built on Migeran’s LibGodot integration.
+
 ### Features
 
 - Migrated the package to the `create-react-native-library` 0.64.0 Turbo
@@ -9,11 +12,11 @@
 - Added a Swift Package Manager manifest for iOS integrations, including the
   LibGodot and React Native header dependencies used by the native targets.
 - Expo Dev Builds remain supported through the package config plugin. The
-  example itself is now the current React Native Community CLI template rather
-  than an old Expo example.
+  example itself is now the current React Native Community CLI template
+  (React Native 0.88) rather than an old Expo example.
 - Package installation downloads and verifies the prebuilt LibGodot
   `4.5.1.preeternal.1` artifacts on demand instead of shipping them inside the
-  npm package.
+  npm package. No need to call `download-prebuilt` manually.
 - Added compatibility with React Native 0.88, React 19.3, the New
   Architecture, Hermes and `react-native-worklets` 0.13.
 
@@ -40,7 +43,7 @@
 - Android support now requires Android 10 (API 29) or newer and the supported
   ARM ABIs: `armeabi-v7a` and `arm64-v8a`.
 
-### Performance
+### Binary size
 
 - Reduced the release LibGodot binary size: Android release artifacts keep
   native debug symbols in a separate archive, while iOS release frameworks
