@@ -11,14 +11,14 @@ integration and LibGodot integration — was developed and maintained by
 [Migeran](https://migeran.com). Thank you to the Migeran team and contributors
 for building the project and its underlying engine integration.
 
-[Born](https://born.com) deserves credit for the original React Native
-adaptation and early product integration.
+[Born](https://born.com) deserves credit for the original [React Native
+adaptation](https://github.com/borndotcom/react-native-godot) and early product integration.
 
-This fork is currently used in our own projects. Long-term maintenance,
+This fork is currently used in my own project. Long-term maintenance,
 backward compatibility and response times are not guaranteed; support will
-depend on our needs and available time.
+depend on my needs and available time.
 
-# Main Features
+## Main Features
 
 * Supports Android and iOS, built on [LibGodot](https://github.com/Preeternal/libgodot).
 * Supports starting, stopping and restarting the Godot Engine. [(docs)](#initialize-the-godot-instance)
@@ -28,8 +28,7 @@ depend on our needs and available time.
 * The Godot main window and any subwindows created by the Godot app may be embedded into the React Native application either on the same screen, or on separate screens (see [example app](example/)).
 * The whole Godot API is accessible from TypeScript / JavaScript. It is possible to instantiate objects, call methods, get and set properties, attach JS functions to signals, provide JS functions as callables to Godot methods ... etc. [(docs)](#godot-api-usage)
 
-
-# Getting Started with the Example App
+## Getting Started with the Example App
 
 The [example app](example/) shows the main features of React Native Godot in action.
 
@@ -43,7 +42,7 @@ If you use ASDF, run:
 ```sh
 asdf install
 ```
-    
+
 This installs the versions used in our development environment. Otherwise you
 may install the React Native prerequisites using any supported method.
 
@@ -117,7 +116,7 @@ cd example
 yarn ios # or yarn android
 ```
 
-# Your first React Native Godot App
+## Your first React Native Godot App
 
 This fork is being prepared for its first npm release under
 `@preeternal/react-native-godot`. The installation commands below describe the
@@ -195,6 +194,7 @@ For a React Native Community CLI project, the package is autolinked normally. In
 ## Prebuilt LibGodot packages
 
 The LibGodot packages used by React Native Godot are not distributed on npm. The package downloads and verifies them automatically during installation.
+The current package uses LibGodot `4.5.1.preeternal.1`, based on Godot `4.5.1`.
 
 To repeat the download manually, for example after setting local LibGodot override paths, run:
 
@@ -276,6 +276,7 @@ function initGodot() {
   }
 }
 ```
+
 A couple of things to note here:
 
 * The usual Godot command line parameters can be passed to the initialization function.
@@ -359,14 +360,15 @@ To export your project to iOS or Android, use our included `export_godot.sh` scr
 ```
 
 Notes:
+
 * Android projects will be exported into project folders while iOS project will be exported as PCK files.
 * By default, `export_godot.sh` will look for an official Godot installation under the Applications folder. If your installation is somewhere else or you would like to use a custom Godot build, specify it's location in the `GODOT_EDITOR` environment variable.
 
-# Godot API Usage
+## Godot API Usage
 
 After importing React Native Godot, you can access the Godot API through the `RTNGodot` class.
 
-## Get the API entry point
+### Get the API entry point
 
 To access the Godot API, first call `RTNGodot.API()`:
 
@@ -374,7 +376,7 @@ To access the Godot API, first call `RTNGodot.API()`:
 let Godot = RTNGodot.API();
 ```
 
-## Access Singletons
+### Access Singletons
 
 From the entry point, you can get the engine's singletons:
 
@@ -384,7 +386,7 @@ let Godot = RTNGodot.API();
 var engine = Godot.Engine;
 ```
 
-## Instantiate Objects
+### Instantiate Objects
 
 You can instantiate Godot API objects using their defined constructors:
 
@@ -392,7 +394,7 @@ You can instantiate Godot API objects using their defined constructors:
 var vector = Godot.Vector2();
 ```
 
-## Access properties
+### Access properties
 
 Object properties can be accessed directly:
 
@@ -402,7 +404,7 @@ vector.x = 1.0;
 vector.y = 2.0;
 ```
 
-## Call methods
+### Call methods
 
 Godot API methods can also be called:
 
@@ -416,7 +418,7 @@ var root = sceneTree.get_root();
 // NOTE: From here you can access nodes of the scene tree and manipulate them from TypeScript.
 ```
 
-## Attach to signals
+### Attach to signals
 
 JS functions can be connected to Godot signals:
 
@@ -431,7 +433,7 @@ button.pressed.connect(function() {
 })
 ```
 
-## Pass JS functions to Godot
+### Pass JS functions to Godot
 
 JS functions can be passed to Godot methods to be used as Callables:
 
@@ -460,7 +462,7 @@ iface.test_callable(function(s: string) {
 }); 
 ```
 
-## Threading and JavaScript in React Native
+### Threading and JavaScript in React Native
 
 In a React Native app, the main JavaScript thread, where the bulk of the JavaScript code of the application runs is separate from the Android or iOS apps's main thread.
 
@@ -486,11 +488,9 @@ While it is possible to interact with the Godot Engine directly from the main Re
 
 * Godot object references that were obtained in the Main JS thread and in worklets are not interchangeable, because they are associated with separate JS contexts. It is possible to create object references that can work in multiple JS contexts, but these would add runtime overhead and are currently not supported in React Native Godot.
 
+## Advanced Topics
 
-
-# Advanced Topics
-
-## Using a custom LibGodot build
+### Using a custom LibGodot build
 
 1. To use a custom LibGodot build, you first need to clone the [Preeternal LibGodot project](https://github.com/Preeternal/libgodot), including all its submodules.
 
@@ -544,7 +544,7 @@ following line needs to be updated to include `godot-dev` as the artifactId:
     api "com.migeran.libgodot:godot-debug:${libGodotVersion}-SNAPSHOT"
     ```
 
-## Debug Native Godot code
+### Debug Native Godot code
 
 To debug native engine code (C++), you first need to build and install a development version of LibGodot as described above.
 
@@ -565,9 +565,9 @@ ln -s /path/to/libgodot/godot godot
 
 * Then reimport the project / resync the Gradle project files into Android Studio.
 
-## Debugging Godot Projects in the Godot Editor
+### Debugging Godot Projects in the Godot Editor
 
-### Android
+#### Android
 
 1. For remote debugging, you first need to build and install a development version of LibGodot as described above.
 
@@ -590,7 +590,7 @@ ln -s /path/to/libgodot/godot godot
 
 1. Once your breakpoints are set, you can start debugging by launching your app from Android Studio.
 
-### iOS
+#### iOS
 
 1. For remote debugging, you first need to build and install a development version of LibGodot as described above.
 
@@ -609,10 +609,20 @@ ln -s /path/to/libgodot/godot godot
 
 NOTE: Your Mac and your iOS device must be connected to the same network/router in order to establish the connection. 
 
-# Project
+## Project
 
 Issues and pull requests are welcome in the [GitHub repository](https://github.com/Preeternal/react-native-godot).
 
-# License
+## Contributing
 
-Preeternal React Native Godot is released under the MIT license.
+Contributions are welcome.
+
+- [Development workflow](CONTRIBUTING.md#development-workflow)
+- [Sending a pull request](CONTRIBUTING.md#sending-a-pull-request)
+- [Code of conduct](CODE_OF_CONDUCT.md)
+
+## License
+
+MIT. See [LICENSE](LICENSE) for details.
+
+Made with [create-react-native-library](https://github.com/callstack/react-native-builder-bob).
