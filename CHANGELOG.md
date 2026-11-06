@@ -1,6 +1,6 @@
 # Releases
 
-## Unreleased
+## v0.1.0 - First Public Release
 
 First release of the maintained fork of the original
 [@borndotcom/react-native-godot](https://github.com/borndotcom/react-native-godot), built on Migeran’s LibGodot integration.
