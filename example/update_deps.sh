@@ -16,12 +16,12 @@ then
     export SHASUM_CHECK=false
 fi
 
-cd $GODOT_TEST_DIR
+cd "$GODOT_TEST_DIR/.."
 
 yarn install
 
 yarn download-prebuilt
 
-cd ios
+cd "$GODOT_TEST_DIR/ios"
 bundle install
 bundle exec pod install

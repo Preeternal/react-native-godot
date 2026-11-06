@@ -1,0 +1,49 @@
+name: Manual Publish
+
+on:
+  workflow_dispatch: {}
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Setup Node.js
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .nvmrc
+          registry-url: 'https://registry.npmjs.org'
+          cache: 'yarn'
+
+      - name: Enable Corepack
+        run: corepack enable
+
+      - name: Install dependencies
+        run: yarn install --immutable
+
+      - name: Ensure LibGodot prebuilts
+        run: yarn download-prebuilt
+
+      - name: Ensure version not already on npm
+        run: |
+          NAME="$(node -p "require('./package.json').name")"
+          VERSION="$(node -p "require('./package.json').version")"
+          if npm view "${NAME}@${VERSION}" version >/dev/null 2>&1; then
+            echo "::error::${NAME}@${VERSION} already exists on npm"
+            exit 1
+          fi
+
+      - name: Build package
+        run: yarn prepare
+
+      - name: Verify packaged artifacts
+        run: yarn check:packaged-artifacts
+
+      - name: Publish to npm
+        run: npm publish --access public --provenance

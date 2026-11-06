@@ -24,6 +24,7 @@
 /**************************************************************************/
 
 #import "GodotModule.h"
+#import <UIKit/UIKit.h>
 
 #define LOG_TAG "GodotModule"
 #include "godot-log.h"

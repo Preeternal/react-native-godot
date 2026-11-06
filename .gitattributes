@@ -6,3 +6,7 @@
 libgodot filter=lfs diff=lfs merge=lfs -text
 godot.*.editor.* filter=lfs diff=lfs merge=lfs -text
 godot filter=lfs diff=lfs merge=lfs -text
+*.pbxproj -text
+*.bat text eol=crlf
+# Unified diffs require a space prefix on empty context lines.
+.yarn/patches/*.patch whitespace=-blank-at-eol

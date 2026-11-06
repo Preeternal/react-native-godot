@@ -32,7 +32,7 @@ using namespace facebook;
 class NativeGodotModuleJNI : public jni::HybridClass<NativeGodotModuleJNI> {
 public:
 	static auto constexpr kJavaDescriptor =
-			"Lcom/rtngodot/NativeGodotModule;";
+			"Lcom/preeternal/reactnativegodot/NativeGodotModuleModule;";
 	static jni::local_ref<jhybriddata> initHybrid(
 			jni::alias_ref<jhybridobject> jThis,
 			jlong jsContext,

@@ -1,4 +1,5 @@
 /build
+/.build
 /android/build
 /android/src/main/cpp/godot
 /android/generated
@@ -9,8 +10,27 @@
 /ios/libs
 /lib
 
-.yarn/
-.expo/
+.yarn/*
+!.yarn/patches/
+!.yarn/patches/**
 .gradle/
 .cxx/
 .DS_Store
+.expo/
+.vscode/
+.idea/
+.turbo/
+.kotlin/
+/coverage/
+/ios/generated/
+**/.xcode.env.local
+*.pbxuser
+*.mode1v3
+*.mode2v3
+*.perspectivev3
+*.xcuserstate
+xcuserdata/
+DerivedData/
+npm-debug.log
+yarn-debug.log
+yarn-error.log

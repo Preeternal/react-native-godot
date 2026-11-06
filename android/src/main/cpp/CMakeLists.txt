@@ -43,8 +43,8 @@ set_target_properties(godot-cpp PROPERTIES IMPORTED_LOCATION ${LIBGODOT_CPP_DIR}
 target_include_directories(godot-cpp INTERFACE ${LIBGODOT_CPP_DIR}/include)
 
 file(GLOB rtngodot_SRC CONFIGURE_DEPENDS *.cpp)
-file(GLOB rtngodot_common_SRC CONFIGURE_DEPENDS ../../../../common/*.cpp)
-add_library(rtngodot SHARED ${rtngodot_SRC} ${rtngodot_common_SRC})
+file(GLOB rtngodot_cpp_SRC CONFIGURE_DEPENDS ../../../../cpp/*.cpp)
+add_library(rtngodot SHARED ${rtngodot_SRC} ${rtngodot_cpp_SRC})
 
 # Android 15+ devices may use 16 KiB memory pages. Keep this module loadable
 # there instead of relying on the OS page-size compatibility mode.
@@ -52,7 +52,7 @@ target_link_options(rtngodot PRIVATE "-Wl,-z,max-page-size=16384")
 
 target_include_directories(rtngodot PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}
-        "../../../../common"
+        "../../../../cpp"
 )
 
 target_link_libraries(

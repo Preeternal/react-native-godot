@@ -7,7 +7,7 @@
  *   yarn download-prebuilt
  *
  * The script:
- * 1. Reads the `prebuiltFiles` array from @borndotcom/react-native-godot's package.json.
+ * 1. Reads the `prebuiltFiles` array from @preeternal/react-native-godot's package.json.
  * 2. For each entry it builds a download URL: `${base_url}${version}/${filename}`.
  * 3. If an environment variable named in the entry's `env` key is set and non‑empty,
  *    its value is treated as a path to a local archive file. The file is copied into
@@ -31,26 +31,25 @@
  * not relative to the current working directory from which the script is invoked.
  */
 
-const fs = require("fs");
-const path = require("path");
-const os = require("os");
-const https = require("https"); // kept for potential future use, not used directly now
-const crypto = require("crypto");
-const { execSync, execFile } = require("child_process");
+const fs = require('fs');
+const path = require('path');
+const os = require('os');
+const crypto = require('crypto');
+const { execSync, execFile } = require('child_process');
 
 // Resolve the library's package.json (the script lives in ./scripts/)
-const libPackagePath = path.resolve(__dirname, "..", "package.json");
+const libPackagePath = path.resolve(__dirname, '..', 'package.json');
 if (!fs.existsSync(libPackagePath)) {
-  console.error("Unable to locate package.json of the library.");
+  console.error('Unable to locate package.json of the library.');
   process.exit(1);
 }
-const libPackage = JSON.parse(fs.readFileSync(libPackagePath, "utf8"));
+const libPackage = JSON.parse(fs.readFileSync(libPackagePath, 'utf8'));
 
 if (
   !Array.isArray(libPackage.prebuiltFiles) ||
   libPackage.prebuiltFiles.length === 0
 ) {
-  console.log("No prebuilt files defined in package.json.");
+  console.log('No prebuilt files defined in package.json.');
   process.exit(0);
 }
 
@@ -68,18 +67,18 @@ function downloadFile(url, destPath) {
     if (fs.existsSync(destPath)) {
       try {
         fs.unlinkSync(destPath);
-      } catch (e) {
+      } catch {
         // ignore
       }
     }
 
-    execFile("curl", ["-L", "-o", destPath, url], (error) => {
+    execFile('curl', ['-L', '-o', destPath, url], (error) => {
       if (error) {
         // Clean up partial download
         if (fs.existsSync(destPath)) {
           try {
             fs.unlinkSync(destPath);
-          } catch (e) {
+          } catch {
             // ignore
           }
         }
@@ -96,11 +95,11 @@ function downloadFile(url, destPath) {
  */
 function computeSha256(filePath) {
   return new Promise((resolve, reject) => {
-    const hash = crypto.createHash("sha256");
+    const hash = crypto.createHash('sha256');
     const stream = fs.createReadStream(filePath);
-    stream.on("error", reject);
-    stream.on("data", (chunk) => hash.update(chunk));
-    stream.on("end", () => resolve(hash.digest("hex")));
+    stream.on('error', reject);
+    stream.on('data', (chunk) => hash.update(chunk));
+    stream.on('end', () => resolve(hash.digest('hex')));
   });
 }
 
@@ -109,7 +108,7 @@ function computeSha256(filePath) {
  */
 function unzipFile(zipPath, targetDir) {
   try {
-    execSync(`unzip -o "${zipPath}" -d "${targetDir}"`, { stdio: "inherit" });
+    execSync(`unzip -o "${zipPath}" -d "${targetDir}"`, { stdio: 'inherit' });
   } catch (err) {
     throw new Error(`Failed to unzip ${zipPath}: ${err.message}`);
   }
@@ -133,7 +132,7 @@ function isNonEmptyDirectory(dirPath) {
  * Resolve a path that is relative to the repository root (the parent folder of this script).
  */
 function resolveRepoRelative(relativePath) {
-  const repoRoot = path.resolve(__dirname, ".."); // parent of ./scripts/
+  const repoRoot = path.resolve(__dirname, '..'); // parent of ./scripts/
   return path.join(repoRoot, relativePath);
 }
 
@@ -144,11 +143,11 @@ function resolveRepoRelative(relativePath) {
   // Determine whether checksum verification should be performed.
   const skipChecksum =
     process.env.SHASUM_CHECK &&
-    process.env.SHASUM_CHECK.toLowerCase() === "false";
+    process.env.SHASUM_CHECK.toLowerCase() === 'false';
 
   const replaceExisting =
     process.env.REPLACE_EXISTING &&
-    process.env.REPLACE_EXISTING.toLowerCase() === "true";
+    process.env.REPLACE_EXISTING.toLowerCase() === 'true';
 
   for (const entry of libPackage.prebuiltFiles) {
     const {
@@ -166,7 +165,7 @@ function resolveRepoRelative(relativePath) {
     const url = `${base_url}${version}/${filename}`;
     console.log(`\nProcessing ${name} (version ${version})`);
     console.log(`Downloading from: ${url}`);
-    const need_unzip = no_unpack.toLowerCase() === "false";
+    const need_unzip = no_unpack.toLowerCase() === 'false';
 
     // Resolve destination directories relative to the repository root.
     const destBaseFull = resolveRepoRelative(destination_base_dir);
@@ -207,7 +206,7 @@ function resolveRepoRelative(relativePath) {
       // -------------------------------------------------------------
       // 1️⃣ If an environment variable is provided, use the local file.
       // -------------------------------------------------------------
-      if (env && process.env[env] && process.env[env].trim() !== "") {
+      if (env && process.env[env] && process.env[env].trim() !== '') {
         const localFilePath = process.env[env];
         console.log(
           `Environment variable ${env} is set. Using local archive: ${localFilePath}`
@@ -222,13 +221,13 @@ function resolveRepoRelative(relativePath) {
         // Copy the local archive into the temporary location so that the rest
         // of the workflow (checksum, unzip) works unchanged.
         fs.copyFileSync(localFilePath, tmpPath);
-        console.log("Copied local archive to temporary location.");
+        console.log('Copied local archive to temporary location.');
       } else {
         // -------------------------------------------------------------
         // 2️⃣ No env var – download from the network (using curl).
         // -------------------------------------------------------------
         await downloadFile(url, tmpPath);
-        console.log("Download completed.");
+        console.log('Download completed.');
       }
 
       // -------------------------------------------------------------
@@ -241,10 +240,10 @@ function resolveRepoRelative(relativePath) {
             `Checksum mismatch for ${name}. Expected ${shasum}, got ${actualHash}`
           );
         }
-        console.log("Checksum verified.");
+        console.log('Checksum verified.');
       } else {
         console.log(
-          "Skipping checksum verification because SHASUM_CHECK is set to false."
+          'Skipping checksum verification because SHASUM_CHECK is set to false.'
         );
       }
 
@@ -259,7 +258,7 @@ function resolveRepoRelative(relativePath) {
         const copyPath = path.join(extractDir, filename);
         fs.copyFileSync(tmpPath, copyPath);
       }
-      console.log("Extraction completed.");
+      console.log('Extraction completed.');
     } catch (err) {
       console.error(`Error processing ${name}: ${err.message}`);
       process.exit(1);
@@ -271,5 +270,5 @@ function resolveRepoRelative(relativePath) {
     }
   }
 
-  console.log("\nAll prebuilt files have been processed successfully.");
+  console.log('\nAll prebuilt files have been processed successfully.');
 })();

@@ -1,7 +1,4 @@
 {
   "extends": "./tsconfig",
-  "compilerOptions": {
-    "rootDir": "./js"
-  },
-  "exclude": ["example"]
+  "exclude": ["example", "lib"]
 }
