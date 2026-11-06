@@ -1,5 +1,9 @@
 # @preeternal/react-native-godot
 
+[![npm version](https://img.shields.io/npm/v/@preeternal/react-native-godot.svg)](https://www.npmjs.com/package/@preeternal/react-native-godot)
+[![npm downloads](https://img.shields.io/npm/dm/@preeternal/react-native-godot.svg)](https://www.npmjs.com/package/@preeternal/react-native-godot)
+[![Patreon](https://img.shields.io/endpoint?url=https%3A%2F%2Fshieldsio-patreon.vercel.app%2Fapi%2F%3Fusername%3Dpreeternal%26type%3Dpatrons)](https://www.patreon.com/preeternal)
+
 React Native Godot allows embedding the Godot Engine into React Native applications.
 
 Preeternal React Native Godot is a maintained fork of the original React Native Godot integration.
