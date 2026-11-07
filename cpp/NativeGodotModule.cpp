@@ -719,7 +719,7 @@ jsi::Value createNativeGodotModule(jsi::Runtime &rt, const std::shared_ptr<faceb
 		GodotModule *mod = GodotModule::get_singleton();
 		godot::GodotInstance *instance = mod->get_or_create_instance(godotArgs);
 		if (!instance) {
-			return jsi::Value::undefined();
+			throw jsi::JSError(rt, "Failed to create Godot instance. See the native engine log for the startup error.");
 		}
 		return GodotHostObject::godotVariantToJsiValue(workletContext, rt, godot::Variant(instance));
 	};

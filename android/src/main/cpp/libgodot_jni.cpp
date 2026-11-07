@@ -48,6 +48,7 @@
 #include <map>
 #include <mutex>
 #include <string>
+#include <vector>
 
 typedef struct WindowData {
 	int width;
@@ -63,7 +64,7 @@ typedef struct WindowData {
 static std::map<std::string, WindowData> windowMap;
 static std::recursive_mutex windowMapMutex;
 
-void LibGodot::initialize(JNIEnv *env, jobject p_asset_manager, jobject p_net_utils, jobject p_dir_access_handler, jobject p_file_access_handler, jobject p_godot_io, jobject p_main_surface, jint p_width, jint p_height, jobject p_godot_engine, jobject p_host_activity, jobject p_class_loader) {
+void LibGodot::initialize(JNIEnv *env, jobject p_asset_manager, jobject p_net_utils, jobject p_dir_access_handler, jobject p_file_access_handler, jobject p_godot_io, jobject p_main_surface, jint p_width, jint p_height) {
 	LOGI("LibGodot::initialize");
 	env->GetJavaVM(&java_vm);
 	asset_manager = env->NewGlobalRef(p_asset_manager);
@@ -73,9 +74,6 @@ void LibGodot::initialize(JNIEnv *env, jobject p_asset_manager, jobject p_net_ut
 	godot_io = env->NewGlobalRef(p_godot_io);
 	ANativeWindow *mainSurface = ANativeWindow_fromSurface(env, p_main_surface);
 	windowMap[""] = WindowData(mainSurface, p_width, p_height, 0);
-	godot_engine = env->NewGlobalRef(p_godot_engine);
-	host_activity = env->NewGlobalRef(p_host_activity);
-	class_loader = env->NewGlobalRef(p_class_loader);
 }
 
 ANativeWindow *LibGodot::get_main_surface() {
@@ -114,19 +112,6 @@ void LibGodot::cleanup(JNIEnv *env) {
 		env->DeleteGlobalRef(godot_io);
 		godot_io = nullptr;
 	}
-	if (godot_engine) {
-		env->DeleteGlobalRef(godot_engine);
-		godot_engine = nullptr;
-	}
-	if (host_activity) {
-		env->DeleteGlobalRef(host_activity);
-		host_activity = nullptr;
-	}
-	if (class_loader) {
-		env->DeleteGlobalRef(class_loader);
-		class_loader = nullptr;
-	}
-
 	{
 		std::lock_guard<std::recursive_mutex> lock(windowMapMutex);
 		for (auto item : windowMap) {
@@ -218,6 +203,7 @@ void LibGodot::updateWindowNative(JNIEnv *env, jstring p_name, jobject p_surface
 
 	ANativeWindow *windowSurface = ANativeWindow_fromSurface(env, p_surface);
 	bool changeSurface = false;
+	ANativeWindow *oldSurface = nullptr;
 	{
 		std::lock_guard<std::recursive_mutex> lock(windowMapMutex);
 
@@ -229,7 +215,12 @@ void LibGodot::updateWindowNative(JNIEnv *env, jstring p_name, jobject p_surface
 		WindowData &winData = windowMap[windowName];
 		if (winData.surface != windowSurface) {
 			changeSurface = true;
+			oldSurface = winData.surface;
 			winData.surface = windowSurface;
+		} else if (!changeSurface && windowSurface != nullptr) {
+			// fromSurface acquired another reference to the same window.
+			// Keep the map's existing reference and release only this extra one.
+			ANativeWindow_release(windowSurface);
 		}
 		if (windowName == "" && changeSurface) {
 			LOGW("Default window surface should never change!");
@@ -240,6 +231,9 @@ void LibGodot::updateWindowNative(JNIEnv *env, jstring p_name, jobject p_surface
 	godot::GodotInstance *instance = GodotModule::get_singleton()->get_instance();
 	if (instance && instance->is_started()) {
 		GodotModule::get_singleton()->runOnGodotThread(createUpdateWindowFunc(windowName, p_width, p_height, windowSurface), true);
+	}
+	if (oldSurface != nullptr && oldSurface != windowSurface) {
+		ANativeWindow_release(oldSurface);
 	}
 }
 
@@ -255,41 +249,35 @@ void LibGodot::removeWindowNative(JNIEnv *env, jstring p_name) {
 		// Default window cannot be removed
 		return;
 	}
+	ANativeWindow *windowSurface = nullptr;
 	{
 		std::lock_guard<std::recursive_mutex> lock(windowMapMutex);
-
 		if (!windowMap.contains(windowName)) {
-			// No window
 			return;
 		}
-
-		ANativeWindow *windowSurface = windowMap[windowName].surface;
-
-		godot::GodotInstance *instance = GodotModule::get_singleton()->get_instance();
-		if (instance && instance->is_started()) {
-			GodotModule::get_singleton()->runOnGodotThread([windowName, windowSurface]() {
-				{
-					// Find window
-					godot::MainLoop *mainLoop = godot::Engine::get_singleton()->get_main_loop();
-					godot::SceneTree *sceneTree = godot::Object::cast_to<godot::SceneTree>(
-							mainLoop);
-					if (!sceneTree) {
-						LOGE("Unable to get SceneTree from Godot!");
-						return;
-					}
-					godot::Node *node = sceneTree->get_root()->find_child(
-							godot::String::utf8(windowName.c_str()), true, false);
-					godot::Window *window = godot::Object::cast_to<godot::Window>(node);
-
-					if (window) {
-						godot::Ref<godot::RenderingNativeSurface> nativeSurface;
-						window->set_native_surface(nativeSurface);
-					}
-					ANativeWindow_release(windowSurface);
-				}
-			});
-		}
+		windowSurface = windowMap[windowName].surface;
 		windowMap.erase(windowName);
+	}
+
+	godot::GodotInstance *instance = GodotModule::get_singleton()->get_instance();
+	if (instance && instance->is_started()) {
+		GodotModule::get_singleton()->runOnGodotThread([windowName]() {
+			godot::MainLoop *mainLoop = godot::Engine::get_singleton()->get_main_loop();
+			godot::SceneTree *sceneTree = godot::Object::cast_to<godot::SceneTree>(mainLoop);
+			if (!sceneTree) {
+				LOGE("Unable to get SceneTree from Godot while removing window");
+				return;
+			}
+			godot::Node *node = sceneTree->get_root()->find_child(
+					godot::String::utf8(windowName.c_str()), true, false);
+			godot::Window *window = godot::Object::cast_to<godot::Window>(node);
+			if (window) {
+				window->set_native_surface(godot::Ref<godot::RenderingNativeSurface>());
+			}
+		}, true);
+	}
+	if (windowSurface != nullptr) {
+		ANativeWindow_release(windowSurface);
 	}
 }
 
@@ -380,12 +368,16 @@ static int32_t getWindowId(std::string p_name) {
 	return -1;
 }
 
-static std::map<int32_t, godot::Vector<TouchPos>> touches;
+static std::map<int32_t, std::vector<TouchPos>> touches;
+
+void LibGodot::clear_input_state() {
+	touches.clear();
+}
 
 extern "C" {
 
-JNIEXPORT void JNICALL Java_com_preeternal_reactnativegodot_RTNLibGodot_initialize(JNIEnv *env, jclass clazz, jobject p_asset_manager, jobject p_net_utils, jobject p_dir_access_handler, jobject p_file_access_handler, jobject p_godot_io, jobject p_main_surface, jint p_width, jint p_height, jobject p_godot_engine, jobject p_host_activity, jobject p_class_loader) {
-	LibGodot::initialize(env, p_asset_manager, p_net_utils, p_dir_access_handler, p_file_access_handler, p_godot_io, p_main_surface, p_width, p_height, p_godot_engine, p_host_activity, p_class_loader);
+JNIEXPORT void JNICALL Java_com_preeternal_reactnativegodot_RTNLibGodot_initialize(JNIEnv *env, jclass clazz, jobject p_asset_manager, jobject p_net_utils, jobject p_dir_access_handler, jobject p_file_access_handler, jobject p_godot_io, jobject p_main_surface, jint p_width, jint p_height) {
+	LibGodot::initialize(env, p_asset_manager, p_net_utils, p_dir_access_handler, p_file_access_handler, p_godot_io, p_main_surface, p_width, p_height);
 }
 
 JNIEXPORT void JNICALL Java_com_preeternal_reactnativegodot_RTNLibGodot_updateWindowNative(JNIEnv *env, jclass clazz, jstring p_name, jobject p_surface, jint p_width, jint p_height) {
@@ -441,145 +433,155 @@ Java_com_preeternal_reactnativegodot_RTNLibGodot_unregisterWindowUpdateCallbackN
 
 // Called on the UI thread
 JNIEXPORT void JNICALL Java_com_preeternal_reactnativegodot_RTNLibGodot_dispatchTouchEvent(JNIEnv *env, jclass clazz, jstring p_name, jint p_event, jint p_pointer, jint pointer_count, jfloatArray position, jboolean p_double_tap) {
-	godot::GodotInstance *instance = GodotModule::get_singleton()->get_instance();
-	if (!instance || !instance->is_started()) {
+	if (!position || pointer_count < 1 || pointer_count > env->GetArrayLength(position) / 6) {
+		return;
+	}
+	std::vector<float> positions(pointer_count * 6);
+	env->GetFloatArrayRegion(position, 0, positions.size(), positions.data());
+	if (env->ExceptionCheck()) {
 		return;
 	}
 	std::string windowName = convertToStdString(env, p_name);
-	int32_t windowId = getWindowId(windowName);
-	if (windowId < 0) {
-		LOGE("Could not find window for name: %s", windowName.c_str());
-		return;
-	}
-	godot::Vector<TouchPos> points;
-	for (int i = 0; i < pointer_count; i++) {
-		jfloat p[6];
-		env->GetFloatArrayRegion(position, i * 6, 6, p);
-		TouchPos tp;
-		tp.id = (int)p[0];
-		tp.pos = godot::Point2(p[1], p[2]);
-		tp.pressure = p[3];
-		tp.tilt = godot::Vector2(p[4], p[5]);
-		points.push_back(tp);
-	}
+	GodotModule::get_singleton()->runOnGodotThread([windowName, positions = std::move(positions), p_event, p_pointer, pointer_count, p_double_tap]() {
 
-	switch (p_event) {
-		case AMOTION_EVENT_ACTION_DOWN: { //gesture begin
+		godot::GodotInstance *instance = GodotModule::get_singleton()->get_instance();
+		if (!instance || !instance->is_started()) {
+			return;
+		}
+		int32_t windowId = getWindowId(windowName);
+		if (windowId < 0) {
+			LOGE("Could not find window for name: %s", windowName.c_str());
+			return;
+		}
+		std::vector<TouchPos> points;
+		for (int i = 0; i < pointer_count; i++) {
+			const float *p = positions.data() + i * 6;
+			TouchPos tp;
+			tp.id = (int)p[0];
+			tp.pos = godot::Point2(p[1], p[2]);
+			tp.pressure = p[3];
+			tp.tilt = godot::Vector2(p[4], p[5]);
+			points.push_back(tp);
+		}
 
-			touches[windowId] = points;
-			godot::Vector<TouchPos> &touch = touches[windowId];
+		switch (p_event) {
+			case AMOTION_EVENT_ACTION_DOWN: { //gesture begin
 
-			//send touch
-			for (int i = 0; i < touch.size(); i++) {
-				godot::Ref<godot::InputEventScreenTouch> ev;
-				ev.instantiate();
-				ev->set_window_id(windowId);
-				ev->set_index(touch[i].id);
-				ev->set_pressed(true);
-				ev->set_canceled(false);
-				ev->set_position(touch[i].pos);
-				ev->set_double_tap(p_double_tap);
-				godot::Input::get_singleton()->parse_input_event(ev);
-			}
-		} break;
-		case AMOTION_EVENT_ACTION_MOVE: { //motion
-			godot::Vector<TouchPos> &touch = touches[windowId];
-			if (touch.size() != points.size()) {
-				return;
-			}
+				touches[windowId] = points;
+				std::vector<TouchPos> &touch = touches[windowId];
 
-			for (int i = 0; i < touch.size(); i++) {
-				int idx = -1;
-				for (int j = 0; j < points.size(); j++) {
-					if (touch[i].id == points[j].id) {
-						idx = j;
-						break;
-					}
-				}
-
-				ERR_CONTINUE(idx == -1);
-
-				if (touch[i].pos == points[idx].pos) {
-					continue; // Don't move unnecessarily.
-				}
-
-				godot::Ref<godot::InputEventScreenDrag> ev;
-				ev.instantiate();
-				ev->set_window_id(windowId);
-				ev->set_index(touch[i].id);
-				ev->set_position(points[idx].pos);
-				ev->set_relative(points[idx].pos - touch[i].pos);
-				//ev->set_relative_screen_position(ev->get_relative());
-				ev->set_pressure(points[idx].pressure);
-				ev->set_tilt(points[idx].tilt);
-				godot::Input::get_singleton()->parse_input_event(ev);
-				touch.write[i].pos = points[idx].pos;
-			}
-
-		} break;
-		case AMOTION_EVENT_ACTION_CANCEL: {
-			godot::Vector<TouchPos> &touch = touches[windowId];
-			for (int i = 0; i < touch.size(); i++) {
-				godot::Ref<godot::InputEventScreenTouch> ev;
-				ev.instantiate();
-				ev->set_window_id(windowId);
-				ev->set_index(touch[i].id);
-				ev->set_pressed(false);
-				ev->set_canceled(true);
-				ev->set_position(touch[i].pos);
-				ev->set_double_tap(p_double_tap);
-				godot::Input::get_singleton()->parse_input_event(ev);
-			}
-		} break;
-		case AMOTION_EVENT_ACTION_UP: { //release
-			godot::Vector<TouchPos> &touch = touches[windowId];
-			for (int i = 0; i < touch.size(); i++) {
-				godot::Ref<godot::InputEventScreenTouch> ev;
-				ev.instantiate();
-				ev->set_window_id(windowId);
-				ev->set_index(touch[i].id);
-				ev->set_pressed(false);
-				ev->set_canceled(false);
-				ev->set_position(touch[i].pos);
-				ev->set_double_tap(p_double_tap);
-				godot::Input::get_singleton()->parse_input_event(ev);
-			}
-		} break;
-		case AMOTION_EVENT_ACTION_POINTER_DOWN: { // add touch
-			godot::Vector<TouchPos> &touch = touches[windowId];
-			for (int i = 0; i < points.size(); i++) {
-				if (points[i].id == p_pointer) {
-					TouchPos tp = points[i];
-					touch.push_back(tp);
-
+				//send touch
+				for (int i = 0; i < touch.size(); i++) {
 					godot::Ref<godot::InputEventScreenTouch> ev;
 					ev.instantiate();
 					ev->set_window_id(windowId);
-					ev->set_index(tp.id);
+					ev->set_index(touch[i].id);
 					ev->set_pressed(true);
-					ev->set_position(tp.pos);
+					ev->set_canceled(false);
+					ev->set_position(touch[i].pos);
+					ev->set_double_tap(p_double_tap);
 					godot::Input::get_singleton()->parse_input_event(ev);
-
-					break;
 				}
-			}
-		} break;
-		case AMOTION_EVENT_ACTION_POINTER_UP: { // remove touch
-			godot::Vector<TouchPos> &touch = touches[windowId];
-			for (int i = 0; i < touch.size(); i++) {
-				if (touch[i].id == p_pointer) {
+			} break;
+			case AMOTION_EVENT_ACTION_MOVE: { //motion
+				std::vector<TouchPos> &touch = touches[windowId];
+				if (touch.size() != points.size()) {
+					return;
+				}
+
+				for (int i = 0; i < touch.size(); i++) {
+					int idx = -1;
+					for (int j = 0; j < points.size(); j++) {
+						if (touch[i].id == points[j].id) {
+							idx = j;
+							break;
+						}
+					}
+
+					ERR_CONTINUE(idx == -1);
+
+					if (touch[i].pos == points[idx].pos) {
+						continue; // Don't move unnecessarily.
+					}
+
+					godot::Ref<godot::InputEventScreenDrag> ev;
+					ev.instantiate();
+					ev->set_window_id(windowId);
+					ev->set_index(touch[i].id);
+					ev->set_position(points[idx].pos);
+					ev->set_relative(points[idx].pos - touch[i].pos);
+					//ev->set_relative_screen_position(ev->get_relative());
+					ev->set_pressure(points[idx].pressure);
+					ev->set_tilt(points[idx].tilt);
+					godot::Input::get_singleton()->parse_input_event(ev);
+					touch[i].pos = points[idx].pos;
+				}
+
+			} break;
+			case AMOTION_EVENT_ACTION_CANCEL: {
+				std::vector<TouchPos> &touch = touches[windowId];
+				for (int i = 0; i < touch.size(); i++) {
 					godot::Ref<godot::InputEventScreenTouch> ev;
 					ev.instantiate();
 					ev->set_window_id(windowId);
 					ev->set_index(touch[i].id);
 					ev->set_pressed(false);
+					ev->set_canceled(true);
 					ev->set_position(touch[i].pos);
+					ev->set_double_tap(p_double_tap);
 					godot::Input::get_singleton()->parse_input_event(ev);
-					touch.remove_at(i);
-					break;
 				}
-			}
-		} break;
-	}
+			} break;
+			case AMOTION_EVENT_ACTION_UP: { //release
+				std::vector<TouchPos> &touch = touches[windowId];
+				for (int i = 0; i < touch.size(); i++) {
+					godot::Ref<godot::InputEventScreenTouch> ev;
+					ev.instantiate();
+					ev->set_window_id(windowId);
+					ev->set_index(touch[i].id);
+					ev->set_pressed(false);
+					ev->set_canceled(false);
+					ev->set_position(touch[i].pos);
+					ev->set_double_tap(p_double_tap);
+					godot::Input::get_singleton()->parse_input_event(ev);
+				}
+			} break;
+			case AMOTION_EVENT_ACTION_POINTER_DOWN: { // add touch
+				std::vector<TouchPos> &touch = touches[windowId];
+				for (int i = 0; i < points.size(); i++) {
+					if (points[i].id == p_pointer) {
+						TouchPos tp = points[i];
+						touch.push_back(tp);
+
+						godot::Ref<godot::InputEventScreenTouch> ev;
+						ev.instantiate();
+						ev->set_window_id(windowId);
+						ev->set_index(tp.id);
+						ev->set_pressed(true);
+						ev->set_position(tp.pos);
+						godot::Input::get_singleton()->parse_input_event(ev);
+
+						break;
+					}
+				}
+			} break;
+			case AMOTION_EVENT_ACTION_POINTER_UP: { // remove touch
+				std::vector<TouchPos> &touch = touches[windowId];
+				for (int i = 0; i < touch.size(); i++) {
+					if (touch[i].id == p_pointer) {
+						godot::Ref<godot::InputEventScreenTouch> ev;
+						ev.instantiate();
+						ev->set_window_id(windowId);
+						ev->set_index(touch[i].id);
+						ev->set_pressed(false);
+						ev->set_position(touch[i].pos);
+						godot::Input::get_singleton()->parse_input_event(ev);
+						touch.erase(touch.begin() + i);
+						break;
+					}
+				}
+			} break;
+		}
+	});
 }
 }

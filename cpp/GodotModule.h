@@ -30,6 +30,7 @@
 
 #include <future>
 #include <mutex>
+#include <optional>
 
 struct PlatformData {};
 
@@ -43,6 +44,9 @@ class GodotModule {
 
 	GodotModule(PlatformData *data) :
 			_data(data) {}
+
+	godot::GodotInstance *get_or_create_instance_on_godot_thread(std::vector<std::string> args);
+	void destroy_instance_on_godot_thread();
 
 public:
 	static GodotModule *get_singleton();
@@ -89,7 +93,7 @@ public:
 
 	void runOnGodotThread(std::function<void()> f, bool wait = false);
 
-	void iterate();
+	void iterate(std::optional<uint64_t> frameGeneration = std::nullopt);
 
 	void set_log_callback(std::function<void(const char *, bool)> lf) {
 		logFunction = lf;

@@ -9,7 +9,7 @@ let reactHeaders: [Target.Dependency] = [
   .product(name: "ReactAppHeaders", package: "React-GeneratedCode"),
 ]
 
-let libGodotVersion = "4.5.1.preeternal.1"
+let libGodotVersion = "4.7.2.preeternal.1-rc.3"
 let libGodotBaseURL = "https://github.com/Preeternal/libgodot/releases/download/\(libGodotVersion)"
 
 let package = Package(
@@ -29,12 +29,12 @@ let package = Package(
     .binaryTarget(
       name: "LibGodot",
       url: "\(libGodotBaseURL)/libgodot.xcframework.zip",
-      checksum: "441131c7bd1b02a95dd336346e5afce3c777881c646a661d09d4a4918c413423"
+      checksum: "d1d20db1cdcd66540a612c8df24faa48734380a19edc7105b0eb506bf7fcb243"
     ),
     .binaryTarget(
       name: "LibGodotCpp",
       url: "\(libGodotBaseURL)/libgodot-cpp.xcframework.zip",
-      checksum: "a39d8ec108fd7083b0c336c2cd559fe5eb78ffd02437f268100e7ce34ac972fd"
+      checksum: "d6515ce6b99d33a0de351670ab7630748f5d26a1733df90419cd3e22e8753f93"
     ),
     .target(
       name: "ReactNativeGodotCpp",

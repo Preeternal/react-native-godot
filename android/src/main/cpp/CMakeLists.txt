@@ -33,14 +33,18 @@ find_package(react-native-worklets REQUIRED CONFIG)
 add_subdirectory("${CMAKE_CURRENT_SOURCE_DIR}/../../../build/generated/source/codegen/jni" generated)
 set(LIBGODOT_CPP_VERSION ${GODOT_CPP_VERSION})
 set(LIBGODOT_CPP_DIR ${CMAKE_CURRENT_SOURCE_DIR}/../../../libs/libgodot-cpp-android/${LIBGODOT_CPP_VERSION}/godot-cpp-android)
+set(LIBGODOT_CPP_ABI_DIR ${LIBGODOT_CPP_DIR}/${ANDROID_ABI})
+if(NOT EXISTS "${LIBGODOT_CPP_ABI_DIR}/include/godot_cpp/variant/string_name.hpp")
+    message(FATAL_ERROR "LibGodot requires generated headers for ${ANDROID_ABI}. Install the selected ABI-specific godot-cpp package.")
+endif()
 
 add_library(
         godot-cpp
         STATIC
         IMPORTED
 )
-set_target_properties(godot-cpp PROPERTIES IMPORTED_LOCATION ${LIBGODOT_CPP_DIR}/${ANDROID_ABI}/libgodot-cpp.a)
-target_include_directories(godot-cpp INTERFACE ${LIBGODOT_CPP_DIR}/include)
+set_target_properties(godot-cpp PROPERTIES IMPORTED_LOCATION ${LIBGODOT_CPP_ABI_DIR}/libgodot-cpp.a)
+target_include_directories(godot-cpp INTERFACE ${LIBGODOT_CPP_ABI_DIR}/include)
 
 file(GLOB rtngodot_SRC CONFIGURE_DEPENDS *.cpp)
 file(GLOB rtngodot_cpp_SRC CONFIGURE_DEPENDS ../../../../cpp/*.cpp)

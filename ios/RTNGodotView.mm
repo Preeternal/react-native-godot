@@ -28,7 +28,6 @@
 
 #include <cmath>
 
-#include <libgodot/libgodot.h>
 #include <godot_cpp/classes/display_server_embedded.hpp>
 #include <godot_cpp/classes/engine.hpp>
 #include <godot_cpp/classes/godot_instance.hpp>

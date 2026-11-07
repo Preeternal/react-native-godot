@@ -8,142 +8,12 @@ import android.util.Log
 import android.view.Surface
 import android.view.SurfaceControl
 import android.view.SurfaceHolder
-import android.view.SurfaceView
-import org.godotengine.godot.Godot
-import org.godotengine.godot.GodotHost
-import org.godotengine.godot.GodotIO
-import org.godotengine.godot.GodotLib
-import org.godotengine.godot.GodotRenderView
-import org.godotengine.godot.IGodotLib
-import org.godotengine.godot.input.GodotInputHandler
 import org.godotengine.godot.io.directory.DirectoryAccessHandler
 import org.godotengine.godot.io.file.FileAccessHandler
-import org.godotengine.godot.plugin.AndroidRuntimePlugin
 import org.godotengine.godot.plugin.GodotPlugin
-import org.godotengine.godot.tts.GodotTTS
 import org.godotengine.godot.utils.GodotNetUtils
 
-class RTNLibGodot private constructor() : IGodotLib, GodotHost, GodotRenderView {
-  private var godot: Godot? = null
-  private var inputHandler: GodotInputHandler? = null
-  private val hostPlugins = HashSet<GodotPlugin>()
-
-  override fun initialize(
-    godot: Godot,
-    assetManager: AssetManager,
-    godotIO: GodotIO,
-    godotNetUtils: GodotNetUtils,
-    directoryAccessHandler: DirectoryAccessHandler,
-    fileAccessHandler: FileAccessHandler,
-    unused: Boolean,
-  ): Boolean {
-    val mainWindow = windowData[""]
-    if (mainWindow?.surface == null) {
-      Log.e(TAG, "Main window surface is unavailable; call init() before initialize()")
-      return false
-    }
-
-    initialize(
-      assetManager,
-      godotNetUtils,
-      directoryAccessHandler,
-      fileAccessHandler,
-      godotIO,
-      mainWindow.surface,
-      mainWindow.width,
-      mainWindow.height,
-      godot,
-      hostActivity,
-      RTNLibGodot::class.java.classLoader,
-    )
-    return true
-  }
-
-  override fun ondestroy() = Unit
-
-  override fun setup(strings: Array<String>, godotTTS: GodotTTS): Boolean = true
-
-  override fun resize(surface: Surface, width: Int, height: Int) {
-    Log.i(TAG, "Resize")
-  }
-
-  override fun newcontext(surface: Surface) = Unit
-  override fun back() = Unit
-  override fun step(): Boolean = false
-  override fun ttsCallback(a: Int, b: Int, c: Int) = Unit
-
-  override fun dispatchTouchEvent(
-    event: Int,
-    pointer: Int,
-    pointerCount: Int,
-    positions: FloatArray,
-    doubleTap: Boolean,
-  ) {
-    dispatchTouchEvent("", event, pointer, pointerCount, positions, doubleTap)
-  }
-
-  override fun dispatchMouseEvent(
-    event: Int,
-    buttonMask: Int,
-    x: Float,
-    y: Float,
-    deltaX: Float,
-    deltaY: Float,
-    doubleClick: Boolean,
-    sourceMouseRelative: Boolean,
-    pressure: Float,
-    tiltX: Float,
-    tiltY: Float,
-  ) = Unit
-
-  override fun magnify(a: Float, b: Float, c: Float) = Unit
-  override fun pan(a: Float, b: Float, c: Float, d: Float) = Unit
-  override fun accelerometer(a: Float, b: Float, c: Float) = Unit
-  override fun gravity(a: Float, b: Float, c: Float) = Unit
-  override fun magnetometer(a: Float, b: Float, c: Float) = Unit
-  override fun gyroscope(a: Float, b: Float, c: Float) = Unit
-  override fun key(a: Int, b: Int, c: Int, d: Boolean, e: Boolean) = Unit
-  override fun joybutton(a: Int, b: Int, c: Boolean) = Unit
-  override fun joyaxis(a: Int, b: Int, c: Float) = Unit
-  override fun joyhat(a: Int, b: Int, c: Int) = Unit
-  override fun joyconnectionchanged(a: Int, b: Boolean, c: String) = Unit
-  override fun focusin() = Unit
-  override fun focusout() = Unit
-
-  override external fun getGlobal(path: String): String
-  override external fun getRendererInfo(): Array<String>
-
-  override fun getEditorSetting(path: String): String = ""
-  override fun setEditorSetting(path: String, value: Any?) = Unit
-  override fun getEditorProjectMetadata(path: String, key: String, defaultValue: Any?): Any? = null
-  override fun setEditorProjectMetadata(path: String, key: String, value: Any?) = Unit
-  override fun requestPermissionResult(permission: String, granted: Boolean) = Unit
-  override fun onNightModeChanged() = Unit
-  override fun hardwareKeyboardConnected(connected: Boolean) = Unit
-  override fun filePickerCallback(success: Boolean, files: Array<String>) = Unit
-  override fun setVirtualKeyboardHeight(height: Int) = Unit
-  override fun onRendererResumed() = Unit
-  override fun onRendererPaused() = Unit
-  override fun shouldDispatchInputToRenderThread(): Boolean = false
-  override fun getProjectResourceDir(): String = ""
-  override fun isEditorHint(): Boolean = false
-  override fun isProjectManagerHint(): Boolean = false
-  override fun providesRenderView(): Boolean = true
-  override fun getRenderView(): GodotRenderView = this
-  override fun getActivity(): Activity? = hostActivity
-  override fun getGodot(): Godot? = godot
-  override fun getView(): SurfaceView? = null
-  override fun startRenderer() = Unit
-  override fun queueOnRenderThread(runnable: Runnable) = Unit
-  override fun onActivityPaused() = Unit
-  override fun onActivityStopped() = Unit
-  override fun onActivityResumed() = Unit
-  override fun onActivityStarted() = Unit
-  override fun onActivityDestroyed() = Unit
-  override fun getInputHandler(): GodotInputHandler? = inputHandler
-  override fun configurePointerIcon(a: Int, b: String, c: Float, d: Float) = Unit
-  override fun setPointerIcon(pointer: Int) = Unit
-
+class RTNLibGodot private constructor() {
   private class WindowSurfaceData(
     val control: SurfaceControl,
     width: Int,
@@ -224,8 +94,8 @@ class RTNLibGodot private constructor() : IGodotLib, GodotHost, GodotRenderView 
 
   @Synchronized
   fun init(newActivity: Activity?) {
+    hostActivity = newActivity ?: hostActivity
     if (inited) return
-    hostActivity = newActivity
     val currentActivity = hostActivity
     if (currentActivity == null) {
       Log.e(TAG, "Activity not set, abort init")
@@ -237,20 +107,19 @@ class RTNLibGodot private constructor() : IGodotLib, GodotHost, GodotRenderView 
     currentActivity.windowManager.defaultDisplay.getMetrics(metrics)
     getOrCreateWindowSurface("", metrics.widthPixels, metrics.heightPixels)
 
-    GodotLib.setGodotLibImpl(this)
-    godot = Godot.getInstance(currentActivity).also { it.setActivity(currentActivity) }
-    val currentGodot = godot ?: return
-    val runtimePlugins = HashSet<GodotPlugin>().apply {
-      add(AndroidRuntimePlugin(currentGodot))
-      addAll(hostPlugins)
-    }
-
-    if (!currentGodot.initEngine(this, ArrayList(), runtimePlugins)) {
-      Log.e(TAG, "Unable to initialize Godot engine layer")
-      return
-    }
-
-    inputHandler = GodotInputHandler(currentActivity, currentGodot)
+    // Embedded creation owns the engine. Do not call Godot.initEngine(), which
+    // initializes a second engine through the standalone Android JNI API.
+    val context = currentActivity.applicationContext
+    initialize(
+      context.assets,
+      GodotNetUtils(context),
+      DirectoryAccessHandler(context),
+      FileAccessHandler(context),
+      RTNGodotIO(context) { hostActivity },
+      checkNotNull(windowData[""]).surface,
+      metrics.widthPixels,
+      metrics.heightPixels,
+    )
     inited = true
   }
 
@@ -261,11 +130,10 @@ class RTNLibGodot private constructor() : IGodotLib, GodotHost, GodotRenderView 
     }
   }
 
+  @Deprecated("Standalone Godot Android plugins are not supported by the embedded engine")
   fun addHostPlugin(plugin: GodotPlugin) {
-    hostPlugins.add(plugin)
+    throw UnsupportedOperationException("Cannot register standalone Android plugin: ${plugin.javaClass.name}")
   }
-
-  fun getHostPlugins(): Set<GodotPlugin> = hostPlugins
 
   private external fun updateWindowNative(name: String, surface: Surface, width: Int, height: Int)
   private external fun removeWindowNative(name: String)
@@ -299,7 +167,7 @@ class RTNLibGodot private constructor() : IGodotLib, GodotHost, GodotRenderView 
   companion object {
     private const val TAG = "LibGodot"
     private var inited = false
-    private var hostActivity: Activity? = null
+    @Volatile private var hostActivity: Activity? = null
 
     private val INSTANCE = RTNLibGodot()
     private val windowData = HashMap<String, WindowSurfaceData>()
@@ -328,13 +196,10 @@ class RTNLibGodot private constructor() : IGodotLib, GodotHost, GodotRenderView 
       netUtils: GodotNetUtils,
       directoryAccessHandler: DirectoryAccessHandler,
       fileAccessHandler: FileAccessHandler,
-      io: GodotIO,
+      io: RTNGodotIO,
       mainSurface: Surface,
       width: Int,
       height: Int,
-      godot: Godot,
-      hostActivity: Activity?,
-      appClassLoader: ClassLoader?,
     )
 
     @JvmStatic

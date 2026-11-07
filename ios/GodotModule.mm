@@ -29,7 +29,6 @@
 #define LOG_TAG "GodotModule"
 #include "godot-log.h"
 
-#include <libgodot/libgodot.h>
 #include <godot_cpp/classes/display_server_embedded.hpp>
 #include <godot_cpp/classes/engine.hpp>
 #include <godot_cpp/classes/gd_extension_manager.hpp>
@@ -43,6 +42,10 @@
 #include <map>
 #include <mutex>
 #include <string>
+
+#include "../cpp/LibGodotABI.h"
+#include "../cpp/AppleRendererPolicy.h"
+#include <TargetConditionals.h>
 
 static constexpr NSInteger kGodotMaxFramesPerSecond = 60;
 
@@ -156,9 +159,6 @@ static void configureGodotDisplayLink(CADisplayLink *displayLink) {
 
 @end
 
-typedef GDExtensionObjectPtr (*libgodot_create_godot_instance_type)(int, char *[], GDExtensionInitializationFunction, InvokeCallbackFunction, ExecutorData, InvokeCallbackFunction, ExecutorData, LogCallbackFunction, LogCallbackData);
-typedef void (*libgodot_destroy_godot_instance_type)(GDExtensionObjectPtr p_godot_instance);
-
 struct ApplePlatformData : PlatformData {
 	CALayer *mainWindowLayer;
 	godot::Ref<godot::RenderingNativeSurface> mainSurface;
@@ -167,8 +167,8 @@ struct ApplePlatformData : PlatformData {
 	bool in_background = true;
 	bool paused = false;
 	void *handle = nullptr;
-	libgodot_create_godot_instance_type func_libgodot_create_godot_instance = nullptr;
-	libgodot_destroy_godot_instance_type func_libgodot_destroy_godot_instance = nullptr;
+	RNLibGodotCreateFunction func_libgodot_create_godot_instance = nullptr;
+	RNLibGodotDestroyFunction func_libgodot_destroy_godot_instance = nullptr;
 
 	std::map<std::string, std::function<void(bool)>> windowUpdateCallbacks;
 	std::map<void *, std::string> handleToWindowName;
@@ -230,7 +230,12 @@ static void uninitialize_default_module(godot::ModuleInitializationLevel p_level
 	}
 }
 
-static void logCallBack(LogCallbackData p_data, const char *p_log_message, bool p_err) {
+static void logCallBack(RNLibGodotLogCallbackData p_data, const char *p_log_message, bool p_err) {
+	if (p_err) {
+		LOGE("%s", p_log_message);
+	} else {
+		LOGI("%s", p_log_message);
+	}
 	GodotModule *gm = (GodotModule *)p_data;
 	gm->log(p_log_message, p_err);
 }
@@ -247,6 +252,14 @@ GDExtensionBool GDE_EXPORT gdextension_default_init(GDExtensionInterfaceGetProcA
 }
 
 godot::GodotInstance *GodotModule::get_or_create_instance(std::vector<std::string> args) {
+	godot::GodotInstance *result = nullptr;
+	runOnGodotThread([this, &args, &result]() {
+		result = get_or_create_instance_on_godot_thread(std::move(args));
+	}, true);
+	return result;
+}
+
+godot::GodotInstance *GodotModule::get_or_create_instance_on_godot_thread(std::vector<std::string> args) {
 	ApplePlatformData *data = static_cast<ApplePlatformData *>(_data);
 
 	// Make sure that we only run this method once at a time.
@@ -259,28 +272,29 @@ godot::GodotInstance *GodotModule::get_or_create_instance(std::vector<std::strin
 		}
 	}
 
+	const auto renderer = rn_godot::configure_apple_renderer(args, TARGET_OS_SIMULATOR);
+	if (!renderer.error.empty()) {
+		LOGE("Invalid iOS renderer request: %s", renderer.error.c_str());
+		return nullptr;
+	}
+	LOGI("iOS renderer target=%s requested=%s/%s selected=%s/%s",
+			TARGET_OS_SIMULATOR ? "simulator" : "device",
+			renderer.requested_driver.empty() ? "default" : renderer.requested_driver.c_str(),
+			renderer.requested_method.empty() ? "default" : renderer.requested_method.c_str(),
+			renderer.driver.c_str(), renderer.method.c_str());
 	observeApplicationLifecycle(this);
 
-	void *handle = nullptr;
-	if (data->func_libgodot_create_godot_instance == nullptr) {
-		handle = dlopen("libgodot.framework/libgodot", RTLD_LAZY | RTLD_LOCAL | RTLD_FIRST);
-
-		if (handle == nullptr) {
-			NSLog(@"Unable to open libgodot.framework: %s", dlerror());
-			return nullptr;
-		}
-		libgodot_create_godot_instance_type func_libgodot_create_godot_instance = (libgodot_create_godot_instance_type)dlsym(handle, "libgodot_create_godot_instance");
-
-		if (func_libgodot_create_godot_instance == nullptr) {
-			NSLog(@"Unable to load libgodot_create_godot_instance symbol: %s", dlerror());
-			dlclose(handle);
-			return nullptr;
-		}
-
-		{
-			std::lock_guard lock(_mutex);
-			data->func_libgodot_create_godot_instance = func_libgodot_create_godot_instance;
-		}
+	void *handle = dlopen("libgodot.framework/libgodot", RTLD_LAZY | RTLD_LOCAL | RTLD_FIRST);
+	if (!handle) {
+		NSLog(@"Unable to open libgodot.framework: %s", dlerror());
+		return nullptr;
+	}
+	auto create = reinterpret_cast<RNLibGodotCreateFunction>(dlsym(handle, "libgodot_create_godot_instance"));
+	auto destroy = reinterpret_cast<RNLibGodotDestroyFunction>(dlsym(handle, "libgodot_destroy_godot_instance"));
+	if (!create || !destroy) {
+		NSLog(@"LibGodot requires both create and destroy symbols");
+		dlclose(handle);
+		return nullptr;
 	}
 
 	godot::GodotInstance *instance = nullptr;
@@ -295,22 +309,35 @@ godot::GodotInstance *GodotModule::get_or_create_instance(std::vector<std::strin
 		cargs.push_back(arg.c_str());
 	}
 
-	GDExtensionObjectPtr instance_ptr = data->func_libgodot_create_godot_instance(cargs.size(), (char **)cargs.data(), gdextension_default_init, nullptr, nullptr, nullptr, nullptr, logCallBack, this); // TODO: Do we want to use the extra 4 params?
-	if (instance_ptr == nullptr) {
-		// Unable to start Godot
-		NSLog(@"Unable to start Godot");
+	GDExtensionObjectPtr instance_ptr = create(
+			static_cast<int>(cargs.size()),
+			(char **)cargs.data(),
+			gdextension_default_init,
+			logCallBack,
+			this);
+	// Raw teardown must work even if godot-cpp cannot bind the returned object.
+	// Call only after releasing every local Godot Ref/Variant/Callable.
+	auto cleanupFailedCreate = [&]() {
+		if (instance_ptr) {
+			destroy(instance_ptr);
+		}
+		godot::GDExtensionBinding::deinit();
 		if (handle) {
 			dlclose(handle);
-			handle = nullptr;
-			{
-				std::lock_guard lock(_mutex);
-				data->func_libgodot_create_godot_instance = nullptr;
-			}
 		}
+	};
+	if (!instance_ptr) {
+		NSLog(@"Unable to create GodotInstance");
+		cleanupFailedCreate();
 		return nullptr;
 	}
 
 	instance = reinterpret_cast<godot::GodotInstance *>(godot::internal::get_object_instance_binding(instance_ptr));
+	if (!instance) {
+		NSLog(@"Unable to bind GodotInstance returned by LibGodot");
+		cleanupFailedCreate();
+		return nullptr;
+	}
 
 	CGRect screen = [[UIScreen mainScreen] bounds];
 	CGFloat contentScaleFactor = [[UIScreen mainScreen] scale];
@@ -319,6 +346,11 @@ godot::GodotInstance *GodotModule::get_or_create_instance(std::vector<std::strin
 
 	// Godot automatically creates the correct type of layer based on the selected rendering driver
 	godot::Ref<godot::RenderingNativeSurfaceApple> appleSurface = godot::RenderingNativeSurfaceApple::create(0);
+	if (appleSurface.is_null()) {
+		NSLog(@"Unable to create the main Apple rendering surface");
+		cleanupFailedCreate();
+		return nullptr;
+	}
 	CALayer __block *mainWindowLayer = (__bridge CALayer *)(void *)appleSurface->get_layer();
 	mainWindowLayer.bounds = CGRectMake(0, 0, screen.size.width, screen.size.height);
 	mainWindowLayer.position = CGPointMake(0, 0);
@@ -330,7 +362,14 @@ godot::GodotInstance *GodotModule::get_or_create_instance(std::vector<std::strin
 
 	godot::DisplayServerEmbedded::set_native_surface(nativeSurface);
 
-	instance->start();
+	if (!instance->start()) {
+		NSLog(@"Unable to start GodotInstance");
+		godot::DisplayServerEmbedded::set_native_surface(godot::Ref<godot::RenderingNativeSurface>());
+		nativeSurface.unref();
+		appleSurface.unref();
+		cleanupFailedCreate();
+		return nullptr;
+	}
 	bool inBackground;
 
 	{
@@ -340,12 +379,15 @@ godot::GodotInstance *GodotModule::get_or_create_instance(std::vector<std::strin
 		data->mainSurface = nativeSurface;
 		data->contentScaleFactor = contentScaleFactor;
 		data->handle = handle;
+		data->func_libgodot_create_godot_instance = create;
+		data->func_libgodot_destroy_godot_instance = destroy;
 
 		_instance = instance;
 		inBackground = data->in_background;
 	}
 
 	if (inBackground) {
+		instance->focus_out();
 		instance->pause();
 	}
 	updateState();
@@ -366,6 +408,12 @@ double GodotModule::get_content_scale_factor() {
 }
 
 void GodotModule::destroy_instance() {
+	runOnGodotThread([this]() {
+		destroy_instance_on_godot_thread();
+	}, true);
+}
+
+void GodotModule::destroy_instance_on_godot_thread() {
 	ApplePlatformData *data = static_cast<ApplePlatformData *>(_data);
 
 	// Make sure that we only run this method once at a time.
@@ -377,31 +425,8 @@ void GodotModule::destroy_instance() {
 	}
 
 	if (!data->func_libgodot_destroy_godot_instance) {
-		libgodot_destroy_godot_instance_type func_libgodot_destroy_godot_instance = nullptr;
-		void *handle = nullptr;
-
-		{
-			std::lock_guard lock(_mutex);
-			handle = data->handle;
-		}
-
-		if (handle == nullptr) {
-			NSLog(@"Unable to open libgodot.framework: %s", dlerror());
-			return;
-		}
-		func_libgodot_destroy_godot_instance = (libgodot_destroy_godot_instance_type)dlsym(handle, "libgodot_destroy_godot_instance");
-
-		if (func_libgodot_destroy_godot_instance == nullptr) {
-			NSLog(@"Unable to load libgodot_destroy_godot_instance symbol: %s", dlerror());
-			dlclose(handle);
-			handle = nullptr;
-			return;
-		}
-
-		{
-			std::lock_guard lock(_mutex);
-			data->func_libgodot_destroy_godot_instance = func_libgodot_destroy_godot_instance;
-		}
+		NSLog(@"Missing destroy function for the active Godot instance");
+		return;
 	}
 
 	{
@@ -422,6 +447,9 @@ void GodotModule::destroy_instance() {
 
 		dlclose(data->handle);
 		data->handle = nullptr;
+		data->func_libgodot_create_godot_instance = nullptr;
+		data->func_libgodot_destroy_godot_instance = nullptr;
+		data->paused = false;
 	}
 }
 
@@ -482,6 +510,7 @@ void GodotModule::appPause() {
 	[data->thread scheduleBlock:^{
 		godot::GodotInstance *instance = get_instance();
 		if (instance) {
+			instance->focus_out();
 			instance->pause();
 		}
 		[[UIApplication sharedApplication] endBackgroundTask:bgTask];
@@ -500,6 +529,7 @@ void GodotModule::appResume() {
 		godot::GodotInstance *instance = get_instance();
 		if (instance) {
 			instance->resume();
+			instance->focus_in();
 		}
 	}];
 	updateState();
@@ -649,7 +679,8 @@ void GodotModule::runOnGodotThread(std::function<void()> f, bool wait) {
 			waitUntilDone:wait];
 }
 
-void GodotModule::iterate() {
+void GodotModule::iterate(std::optional<uint64_t> frameGeneration) {
+	(void)frameGeneration;
 	godot::GodotInstance *instance = nullptr;
 	{
 		std::lock_guard lock(_mutex);
