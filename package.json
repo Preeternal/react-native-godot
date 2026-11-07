@@ -152,9 +152,9 @@
     {
       "name": "libgodot",
       "filename": "libgodot.xcframework.zip",
-      "version": "4.7.2.preeternal.1-rc.3",
+      "version": "4.7.2.preeternal.1-rc.4",
       "base_url": "https://github.com/Preeternal/libgodot/releases/download/",
-      "shasum": "d1d20db1cdcd66540a612c8df24faa48734380a19edc7105b0eb506bf7fcb243",
+      "shasum": "6bbf51634153ad9206352e36d069cbdf4e8a2a63e11e828a73b38e9a6adc5de5",
       "destination_base_dir": "ios/libs",
       "env": "LIBGODOT_XCFRAMEWORK_PATH",
       "no_unpack": "false"
@@ -162,9 +162,9 @@
     {
       "name": "libgodot-cpp",
       "filename": "libgodot-cpp.xcframework.zip",
-      "version": "4.7.2.preeternal.1-rc.3",
+      "version": "4.7.2.preeternal.1-rc.4",
       "base_url": "https://github.com/Preeternal/libgodot/releases/download/",
-      "shasum": "d6515ce6b99d33a0de351670ab7630748f5d26a1733df90419cd3e22e8753f93",
+      "shasum": "a6a7f0737c9cd5eb981098fe253f794df27aafd14835f6889da3536de92d550e",
       "destination_base_dir": "ios/libs",
       "env": "LIBGODOT_CPP_XCFRAMEWORK_PATH",
       "no_unpack": "false"
@@ -172,9 +172,9 @@
     {
       "name": "libgodot-android",
       "filename": "libgodot-android.zip",
-      "version": "4.7.2.preeternal.1-rc.3",
+      "version": "4.7.2.preeternal.1-rc.4",
       "base_url": "https://github.com/Preeternal/libgodot/releases/download/",
-      "shasum": "c3c041a170a202427a550319ad525d8df020d3011816dd361a4ad78a188fcc3a",
+      "shasum": "e5b94be7fe7f74ce2f147f90ccb2c28a972a91638734d6518807593c15d2c7db",
       "destination_base_dir": "android/libs",
       "env": "LIBGODOT_ANDROID_PATH",
       "no_unpack": "false",
@@ -183,9 +183,9 @@
     {
       "name": "libgodot-cpp-android",
       "filename": "godot-cpp-android.zip",
-      "version": "4.7.2.preeternal.1-rc.3",
+      "version": "4.7.2.preeternal.1-rc.4",
       "base_url": "https://github.com/Preeternal/libgodot/releases/download/",
-      "shasum": "04a9f651b6441da4c8a3406728ff4a1b21ce5a431c2086fd8c1e41bca608e01a",
+      "shasum": "90966d0add089ebffe3baa3f4ea918d329e22fbc0b1a3c267d3c7ef7476f41cc",
       "destination_base_dir": "android/libs",
       "env": "LIBGODOT_CPP_ANDROID_PATH",
       "no_unpack": "false"

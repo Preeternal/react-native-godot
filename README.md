@@ -40,7 +40,7 @@ and available time.
 | Expo         | Development Builds; Expo Go cannot load this native module          |
 
 The engine version is pinned by the installed library. This source branch uses
-[LibGodot `4.7.2.preeternal.1-rc.3`](https://github.com/Preeternal/libgodot/releases/tag/4.7.2.preeternal.1-rc.3),
+[LibGodot `4.7.2.preeternal.1-rc.4`](https://github.com/Preeternal/libgodot/releases/tag/4.7.2.preeternal.1-rc.4),
 based on Godot 4.7.2. Export your Godot content with a compatible editor.
 
 ## Installation
