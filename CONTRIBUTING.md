@@ -60,6 +60,13 @@ services directly. It does not use the removed `IGodotLib` interface or call
 `RTNGodotIO` implements the method descriptors expected by
 `GodotIOJavaWrapper`; keep those methods in the consumer R8 rules.
 Touch events carry their window name and are queued on the Godot thread.
+UI callbacks must not dereference engine bindings. Capture the instance and
+attachment generations when scheduling work; resolve engine objects on the
+Godot thread and discard work from a previous instance or attachment.
+Android resize requests are coalesced and applied asynchronously. Named-surface
+detach still waits for the Godot thread before releasing the native window.
+Keep both the requested and the engine-attached window references alive until
+replacement or detach completes.
 The legacy `addHostPlugin` entry point rejects standalone Android plugins
 explicitly; integrating them requires an embedded-compatible engine API.
 
@@ -70,6 +77,14 @@ are preserved, and Simulator Metal is rejected before calling LibGodot. The
 policy tests use compile-time assertions with `-fsyntax-only`, without building
 or running a native app. Compiled slice evidence does not establish runtime
 correctness or performance.
+
+iOS window subscriptions belong to individual host handles. Several hosts can
+subscribe to the same window without replacing each other's callbacks. Only
+the current main-layer host may resize it or emit readiness. Remove the view's
+retained layer on Stop, even after the engine has cleared its layer pointer.
+The preferred host survives Stop/Start; old resize and input work cannot take
+ownership from a new attachment. `onSurfaceReady` acknowledges host resize work,
+not completion of a visible GPU presentation.
 
 The Worklets patch in `.yarn/patches` handles RTTI for the custom Godot queue
 across shared-library boundaries. Keep it in place when testing this workspace.

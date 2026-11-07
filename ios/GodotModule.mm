@@ -42,9 +42,10 @@
 #include <map>
 #include <mutex>
 #include <string>
+#include <vector>
 
-#include "../cpp/LibGodotABI.h"
 #include "../cpp/AppleRendererPolicy.h"
+#include "../cpp/LibGodotABI.h"
 #include <TargetConditionals.h>
 
 static constexpr NSInteger kGodotMaxFramesPerSecond = 60;
@@ -170,8 +171,11 @@ struct ApplePlatformData : PlatformData {
 	RNLibGodotCreateFunction func_libgodot_create_godot_instance = nullptr;
 	RNLibGodotDestroyFunction func_libgodot_destroy_godot_instance = nullptr;
 
-	std::map<std::string, std::function<void(bool)>> windowUpdateCallbacks;
-	std::map<void *, std::string> handleToWindowName;
+	struct WindowCallback {
+		std::string name;
+		std::function<void(bool)> callback;
+	};
+	std::map<void *, WindowCallback> windowUpdateCallbacks;
 	std::mutex windowUpdateMutex;
 	std::mutex createMutex;
 	GodotThread *thread = nil;
@@ -196,11 +200,17 @@ static void observeApplicationLifecycle(GodotModule *module) {
 			static NSArray *observers;
 			observers = @[
 				[center addObserverForName:UIApplicationWillResignActiveNotification
-								   object:nil queue:[NSOperationQueue mainQueue]
-							   usingBlock:^(NSNotification *notification) { module->appPause(); }],
+									object:nil
+									 queue:[NSOperationQueue mainQueue]
+								usingBlock:^(NSNotification *notification) {
+									module->appPause();
+								}],
 				[center addObserverForName:UIApplicationDidBecomeActiveNotification
-								   object:nil queue:[NSOperationQueue mainQueue]
-							   usingBlock:^(NSNotification *notification) { module->appResume(); }]
+									object:nil
+									 queue:[NSOperationQueue mainQueue]
+								usingBlock:^(NSNotification *notification) {
+									module->appResume();
+								}]
 			];
 			if ([UIApplication sharedApplication].applicationState == UIApplicationStateActive) {
 				module->appResume();
@@ -255,7 +265,8 @@ godot::GodotInstance *GodotModule::get_or_create_instance(std::vector<std::strin
 	godot::GodotInstance *result = nullptr;
 	runOnGodotThread([this, &args, &result]() {
 		result = get_or_create_instance_on_godot_thread(std::move(args));
-	}, true);
+	},
+			true);
 	return result;
 }
 
@@ -383,6 +394,7 @@ godot::GodotInstance *GodotModule::get_or_create_instance_on_godot_thread(std::v
 		data->func_libgodot_destroy_godot_instance = destroy;
 
 		_instance = instance;
+		_instanceGeneration.store(++_lastInstanceGeneration);
 		inBackground = data->in_background;
 	}
 
@@ -410,7 +422,8 @@ double GodotModule::get_content_scale_factor() {
 void GodotModule::destroy_instance() {
 	runOnGodotThread([this]() {
 		destroy_instance_on_godot_thread();
-	}, true);
+	},
+			true);
 }
 
 void GodotModule::destroy_instance_on_godot_thread() {
@@ -436,6 +449,7 @@ void GodotModule::destroy_instance_on_godot_thread() {
 		data->displayLink = nil;
 
 		updateWindows(false);
+		_instanceGeneration.store(0);
 
 		godot::DisplayServerEmbedded::set_native_surface(godot::Ref<godot::RenderingNativeSurface>(nullptr));
 		data->mainWindowLayer = nil;
@@ -565,10 +579,10 @@ void GodotModule::updateState() {
 			}
 		} else if (!threadData->displayLink) {
 			threadData->displayLink = [CADisplayLink displayLinkWithTarget:threadData->thread
-														selector:@selector(step:)];
+																  selector:@selector(step:)];
 			configureGodotDisplayLink(threadData->displayLink);
 			[threadData->displayLink addToRunLoop:[NSRunLoop currentRunLoop]
-									forMode:NSRunLoopCommonModes];
+										  forMode:NSRunLoopCommonModes];
 		}
 	}];
 }
@@ -620,53 +634,42 @@ godot::Callable GodotModule::create_callable(std::function<void(const godot::Var
 void GodotModule::registerWindowUpdateCallback(std::string name, void *handle, std::function<void(bool)> f, void *ref) {
 	ApplePlatformData *data = static_cast<ApplePlatformData *>(_data);
 	std::lock_guard lock(data->windowUpdateMutex);
-	NSLog(@"Registering Window: %llx, %s", (uint64_t)handle, name.c_str());
-	if (data->handleToWindowName.contains(handle)) {
-		std::string currentName = data->handleToWindowName[handle];
-		if (currentName != name) {
-			NSLog(@"ERROR: registerWindowUpdateCallback: Unable to register a different name for the same handle");
-			return;
-		}
-	} else {
-		data->handleToWindowName[handle] = name;
-	}
-	data->windowUpdateCallbacks[name] = f;
+	data->windowUpdateCallbacks[handle] = { std::move(name), std::move(f) };
 }
 
 void GodotModule::unregisterWindowUpdateCallback(void *handle) {
 	ApplePlatformData *data = static_cast<ApplePlatformData *>(_data);
 	std::lock_guard lock(data->windowUpdateMutex);
-	if (data->handleToWindowName.contains(handle)) {
-		std::string name = data->handleToWindowName[handle];
-		NSLog(@"Unregistering Window: %llx, %s", (uint64_t)handle, name.c_str());
-		data->windowUpdateCallbacks.erase(name);
-		data->handleToWindowName.erase(handle);
-	}
+	data->windowUpdateCallbacks.erase(handle);
 }
 
 void GodotModule::updateWindow(std::string name, bool adding) {
 	ApplePlatformData *data = static_cast<ApplePlatformData *>(_data);
-	std::function<void(bool)> cb;
+	std::vector<std::function<void(bool)>> callbacks;
 	{
 		std::lock_guard lock(data->windowUpdateMutex);
-		if (!data->windowUpdateCallbacks.contains(name)) {
-			return;
+		for (const auto &[handle, entry] : data->windowUpdateCallbacks) {
+			if (entry.name == name) {
+				callbacks.push_back(entry.callback);
+			}
 		}
-		cb = data->windowUpdateCallbacks[name];
 	}
-	cb(adding);
+	for (const auto &callback : callbacks) {
+		callback(adding);
+	}
 }
 
 void GodotModule::updateWindows(bool adding) {
 	ApplePlatformData *data = static_cast<ApplePlatformData *>(_data);
-	std::map<std::string, std::function<void(bool)>> callbacks;
+	std::vector<std::function<void(bool)>> callbacks;
 	{
 		std::lock_guard lock(data->windowUpdateMutex);
-		callbacks = data->windowUpdateCallbacks;
+		for (const auto &[handle, entry] : data->windowUpdateCallbacks) {
+			callbacks.push_back(entry.callback);
+		}
 	}
-	for (const std::pair<std::string, std::function<void(bool)>> elem : callbacks) {
-		NSLog(@"Updating Window: %s", elem.first.c_str());
-		elem.second(adding);
+	for (const auto &callback : callbacks) {
+		callback(adding);
 	}
 }
 

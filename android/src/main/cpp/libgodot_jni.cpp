@@ -46,23 +46,37 @@
 #include <godot_cpp/classes/project_settings.hpp>
 #include <godot_cpp/classes/rendering_server.hpp>
 #include <map>
+#include <memory>
 #include <mutex>
 #include <string>
 #include <vector>
 
-typedef struct WindowData {
+using NativeWindowRef = std::shared_ptr<ANativeWindow>;
+
+static NativeWindowRef adoptWindow(ANativeWindow *window) {
+	return NativeWindowRef(window, [](ANativeWindow *value) {
+		if (value) {
+			ANativeWindow_release(value);
+		}
+	});
+}
+
+struct WindowData {
 	int width;
 	int height;
 	int32_t id;
-	ANativeWindow *surface;
-	WindowData() :
-			width(0), height(0), id(-1), surface(nullptr) {}
-	WindowData(ANativeWindow *p_surface, int p_width, int p_height, int32_t p_id = -1) :
-			width(p_width), height(p_height), id(p_id), surface(p_surface) {}
-} WindowData;
+	NativeWindowRef surface;
+	// Keep the engine's borrowed ANativeWindow alive until replacement or detach.
+	NativeWindowRef attachedSurface;
+	bool active = true;
+	bool updatePending = false;
+	uint64_t attachmentGeneration = 1;
+	WindowData(NativeWindowRef p_surface, int p_width, int p_height, int32_t p_id = -1) :
+			width(p_width), height(p_height), id(p_id), surface(std::move(p_surface)) {}
+};
 
-static std::map<std::string, WindowData> windowMap;
-static std::recursive_mutex windowMapMutex;
+static std::map<std::string, std::shared_ptr<WindowData>> windowMap;
+static std::mutex windowMapMutex;
 
 void LibGodot::initialize(JNIEnv *env, jobject p_asset_manager, jobject p_net_utils, jobject p_dir_access_handler, jobject p_file_access_handler, jobject p_godot_io, jobject p_main_surface, jint p_width, jint p_height) {
 	LOGI("LibGodot::initialize");
@@ -73,22 +87,30 @@ void LibGodot::initialize(JNIEnv *env, jobject p_asset_manager, jobject p_net_ut
 	file_access_handler = env->NewGlobalRef(p_file_access_handler);
 	godot_io = env->NewGlobalRef(p_godot_io);
 	ANativeWindow *mainSurface = ANativeWindow_fromSurface(env, p_main_surface);
-	windowMap[""] = WindowData(mainSurface, p_width, p_height, 0);
+	std::lock_guard<std::mutex> lock(windowMapMutex);
+	windowMap[""] = std::make_shared<WindowData>(adoptWindow(mainSurface), p_width, p_height, 0);
 }
 
 ANativeWindow *LibGodot::get_main_surface() {
-	std::lock_guard<std::recursive_mutex> lock(windowMapMutex);
-	return windowMap[""].surface;
+	std::lock_guard<std::mutex> lock(windowMapMutex);
+	auto it = windowMap.find("");
+	if (it == windowMap.end()) {
+		return nullptr;
+	}
+	it->second->attachedSurface = it->second->surface;
+	return it->second->surface.get();
 }
 
 int LibGodot::get_main_width() {
-	std::lock_guard<std::recursive_mutex> lock(windowMapMutex);
-	return windowMap[""].width;
+	std::lock_guard<std::mutex> lock(windowMapMutex);
+	auto it = windowMap.find("");
+	return it == windowMap.end() ? 0 : it->second->width;
 }
 
 int LibGodot::get_main_height() {
-	std::lock_guard<std::recursive_mutex> lock(windowMapMutex);
-	return windowMap[""].height;
+	std::lock_guard<std::mutex> lock(windowMapMutex);
+	auto it = windowMap.find("");
+	return it == windowMap.end() ? 0 : it->second->height;
 }
 
 void LibGodot::cleanup(JNIEnv *env) {
@@ -113,10 +135,10 @@ void LibGodot::cleanup(JNIEnv *env) {
 		godot_io = nullptr;
 	}
 	{
-		std::lock_guard<std::recursive_mutex> lock(windowMapMutex);
-		for (auto item : windowMap) {
-			WindowData &data = item.second;
-			ANativeWindow_release(data.surface);
+		std::lock_guard<std::mutex> lock(windowMapMutex);
+		for (const auto &[name, state] : windowMap) {
+			state->active = false;
+			++state->attachmentGeneration;
 		}
 		windowMap.clear();
 	}
@@ -138,58 +160,90 @@ void LibGodot::set_java_vm(JavaVM *vm) {
 	java_vm = vm;
 }
 
-static std::function<void()> createUpdateWindowFunc(std::string p_window_name, int p_width, int p_height, ANativeWindow *p_window_surface) {
-	return [p_window_name, p_width, p_height, p_window_surface]() {
-		godot::DisplayServerEmbedded *dse = godot::DisplayServerEmbedded::get_singleton();
-		int32_t windowId = -1;
-		if (p_window_name == "") {
-			// Default id
-			windowId = 0;
-		} else {
-			// Find window
-			godot::MainLoop *mainLoop = godot::Engine::get_singleton()->get_main_loop();
-			godot::SceneTree *sceneTree = godot::Object::cast_to<godot::SceneTree>(mainLoop);
-			if (!sceneTree) {
-				LOGE("Unable to get SceneTree from Godot!");
-				return;
-			}
-			godot::Node *node = sceneTree->get_root()->find_child(
-					godot::String::utf8(p_window_name.c_str()), true, false);
-			godot::Window *newWindow = godot::Object::cast_to<godot::Window>(node);
-
-			if (newWindow) {
-				bool change_surface = true;
-				godot::Ref<godot::RenderingNativeSurfaceAndroid> ns = newWindow->get_native_surface();
-				if (ns.is_valid()) {
-					ANativeWindow *current_window = (ANativeWindow *)ns->get_window();
-					if (current_window == p_window_surface) {
-						change_surface = false;
-					}
-				}
-
-				if (change_surface) {
-					LOGI("Changing surface");
-					godot::Ref<godot::RenderingNativeSurfaceAndroid> androidSurface = godot::RenderingNativeSurfaceAndroid::create(
-							(uint64_t)p_window_surface, p_width, p_height);
-
-					newWindow->set_visible(true);
-					newWindow->set_native_surface(androidSurface);
-				}
-
-				windowId = newWindow->get_window_id();
-			}
+static void applyWindowUpdate(const std::string &p_window_name, const std::shared_ptr<WindowData> &state) {
+	int p_width, p_height;
+	NativeWindowRef surface;
+	{
+		std::lock_guard<std::mutex> lock(windowMapMutex);
+		state->updatePending = false;
+		if (!state->active) {
+			return;
 		}
-		if (windowId >= 0) {
-			LOGI("Resizing Window: %d %d %d", windowId, p_width, p_height);
-			dse->resize_window(godot::Vector2i(p_width, p_height), windowId);
-			{
-				std::lock_guard<std::recursive_mutex> lock(windowMapMutex);
-				if (windowId > 0 && windowMap.contains(p_window_name)) {
-					windowMap[p_window_name].id = windowId;
+		p_width = state->width;
+		p_height = state->height;
+		surface = state->surface;
+	}
+	// This function and engine teardown are serialized on the Godot thread.
+	auto *instance = GodotModule::get_singleton()->get_instance();
+	if (!instance || !instance->is_started() || !surface || p_width <= 0 || p_height <= 0) {
+		return;
+	}
+	ANativeWindow *p_window_surface = surface.get();
+	godot::DisplayServerEmbedded *dse = godot::DisplayServerEmbedded::get_singleton();
+	if (!dse) {
+		return;
+	}
+	int32_t windowId = -1;
+	if (p_window_name == "") {
+		// Default id
+		windowId = 0;
+	} else {
+		// Find window
+		godot::MainLoop *mainLoop = godot::Engine::get_singleton()->get_main_loop();
+		godot::SceneTree *sceneTree = godot::Object::cast_to<godot::SceneTree>(mainLoop);
+		if (!sceneTree) {
+			LOGE("Unable to get SceneTree from Godot!");
+			return;
+		}
+		godot::Node *node = sceneTree->get_root()->find_child(
+				godot::String::utf8(p_window_name.c_str()), true, false);
+		godot::Window *newWindow = godot::Object::cast_to<godot::Window>(node);
+
+		if (newWindow) {
+			bool change_surface = true;
+			godot::Ref<godot::RenderingNativeSurfaceAndroid> ns = newWindow->get_native_surface();
+			if (ns.is_valid()) {
+				ANativeWindow *current_window = (ANativeWindow *)ns->get_window();
+				if (current_window == p_window_surface) {
+					change_surface = false;
 				}
 			}
+
+			if (change_surface) {
+				LOGI("Changing surface");
+				godot::Ref<godot::RenderingNativeSurfaceAndroid> androidSurface = godot::RenderingNativeSurfaceAndroid::create(
+						(uint64_t)p_window_surface, p_width, p_height);
+				if (androidSurface.is_null()) {
+					return;
+				}
+
+				newWindow->set_visible(true);
+				newWindow->set_native_surface(androidSurface);
+			}
+
+			windowId = newWindow->get_window_id();
 		}
-	};
+	}
+	if (windowId >= 0) {
+		LOGI("Resizing Window: %d %d %d", windowId, p_width, p_height);
+		dse->resize_window(godot::Vector2i(p_width, p_height), windowId);
+		std::lock_guard<std::mutex> lock(windowMapMutex);
+		state->id = windowId;
+		state->attachedSurface = surface;
+	}
+}
+
+static void scheduleWindowUpdate(const std::string &name, const std::shared_ptr<WindowData> &state) {
+	{
+		std::lock_guard<std::mutex> lock(windowMapMutex);
+		if (!state->active || state->updatePending) {
+			return;
+		}
+		state->updatePending = true;
+	}
+	GodotModule::get_singleton()->runOnGodotThread([name, state]() {
+		applyWindowUpdate(name, state);
+	});
 }
 
 void LibGodot::updateWindowNative(JNIEnv *env, jstring p_name, jobject p_surface, jint p_width, jint p_height) {
@@ -201,107 +255,98 @@ void LibGodot::updateWindowNative(JNIEnv *env, jstring p_name, jobject p_surface
 		env->ReleaseStringUTFChars(p_name, val);
 	}
 
-	ANativeWindow *windowSurface = ANativeWindow_fromSurface(env, p_surface);
-	bool changeSurface = false;
-	ANativeWindow *oldSurface = nullptr;
+	NativeWindowRef surface = adoptWindow(ANativeWindow_fromSurface(env, p_surface));
+	if (!surface || p_width <= 0 || p_height <= 0) {
+		return;
+	}
+	std::shared_ptr<WindowData> state;
 	{
-		std::lock_guard<std::recursive_mutex> lock(windowMapMutex);
-
-		if (!windowMap.contains(windowName)) {
-			windowMap[windowName] = WindowData(windowSurface, p_width, p_height);
-			changeSurface = true;
+		std::lock_guard<std::mutex> lock(windowMapMutex);
+		auto &entry = windowMap[windowName];
+		if (!entry) {
+			entry = std::make_shared<WindowData>(surface, p_width, p_height, windowName.empty() ? 0 : -1);
 		}
-
-		WindowData &winData = windowMap[windowName];
-		if (winData.surface != windowSurface) {
-			changeSurface = true;
-			oldSurface = winData.surface;
-			winData.surface = windowSurface;
-		} else if (!changeSurface && windowSurface != nullptr) {
-			// fromSurface acquired another reference to the same window.
-			// Keep the map's existing reference and release only this extra one.
-			ANativeWindow_release(windowSurface);
+		state = entry;
+		if (!state->active || state->surface.get() != surface.get()) {
+			++state->attachmentGeneration;
 		}
-		if (windowName == "" && changeSurface) {
-			LOGW("Default window surface should never change!");
-		}
-		winData.width = p_width;
-		winData.height = p_height;
+		state->surface = std::move(surface);
+		state->active = true;
+		state->width = p_width;
+		state->height = p_height;
 	}
-	godot::GodotInstance *instance = GodotModule::get_singleton()->get_instance();
-	if (instance && instance->is_started()) {
-		GodotModule::get_singleton()->runOnGodotThread(createUpdateWindowFunc(windowName, p_width, p_height, windowSurface), true);
-	}
-	if (oldSurface != nullptr && oldSurface != windowSurface) {
-		ANativeWindow_release(oldSurface);
-	}
+	// Only one pending job per window; it reads the latest requested size.
+	scheduleWindowUpdate(windowName, state);
 }
 
 void LibGodot::removeWindowNative(JNIEnv *env, jstring p_name) {
-	std::string windowName;
+	const uint64_t engineGeneration = GodotModule::get_singleton()->get_instance_generation();
+	const char *name = env->GetStringUTFChars(p_name, nullptr);
+	std::string windowName(name);
+	env->ReleaseStringUTFChars(p_name, name);
+	std::shared_ptr<WindowData> state;
 	{
-		jboolean isCopy;
-		const char *val = env->GetStringUTFChars(p_name, &isCopy);
-		windowName = val;
-		env->ReleaseStringUTFChars(p_name, val);
-	}
-	if (windowName == "") {
-		// Default window cannot be removed
-		return;
-	}
-	ANativeWindow *windowSurface = nullptr;
-	{
-		std::lock_guard<std::recursive_mutex> lock(windowMapMutex);
-		if (!windowMap.contains(windowName)) {
+		std::lock_guard<std::mutex> lock(windowMapMutex);
+		auto it = windowMap.find(windowName);
+		if (it == windowMap.end()) {
 			return;
 		}
-		windowSurface = windowMap[windowName].surface;
-		windowMap.erase(windowName);
+		state = it->second;
+		state->active = false;
+		++state->attachmentGeneration;
+		if (!windowName.empty()) {
+			windowMap.erase(it);
+		}
 	}
-
-	godot::GodotInstance *instance = GodotModule::get_singleton()->get_instance();
-	if (instance && instance->is_started()) {
-		GodotModule::get_singleton()->runOnGodotThread([windowName]() {
-			godot::MainLoop *mainLoop = godot::Engine::get_singleton()->get_main_loop();
-			godot::SceneTree *sceneTree = godot::Object::cast_to<godot::SceneTree>(mainLoop);
-			if (!sceneTree) {
-				LOGE("Unable to get SceneTree from Godot while removing window");
-				return;
+	// The default child SurfaceControl is persistent even while its host is hidden.
+	if (windowName.empty()) {
+		return;
+	}
+	// SurfaceHolder requires rendering to stop before a named Surface is destroyed.
+	GodotModule::get_singleton()->runOnGodotThread([windowName, state, engineGeneration]() {
+		auto *instance = GodotModule::get_singleton()->get_instance();
+		if (engineGeneration != 0 && engineGeneration == GodotModule::get_singleton()->get_instance_generation() &&
+				instance && instance->is_started()) {
+			auto *tree = godot::Object::cast_to<godot::SceneTree>(godot::Engine::get_singleton()->get_main_loop());
+			if (tree) {
+				auto *window = godot::Object::cast_to<godot::Window>(tree->get_root()->find_child(
+						godot::String::utf8(windowName.c_str()), true, false));
+				if (window) {
+					window->set_native_surface(godot::Ref<godot::RenderingNativeSurface>());
+				}
 			}
-			godot::Node *node = sceneTree->get_root()->find_child(
-					godot::String::utf8(windowName.c_str()), true, false);
-			godot::Window *window = godot::Object::cast_to<godot::Window>(node);
-			if (window) {
-				window->set_native_surface(godot::Ref<godot::RenderingNativeSurface>());
-			}
-		}, true);
-	}
-	if (windowSurface != nullptr) {
-		ANativeWindow_release(windowSurface);
-	}
+		}
+		std::lock_guard<std::mutex> lock(windowMapMutex);
+		state->attachedSurface.reset();
+		state->surface.reset();
+	},
+			true);
 }
 
 void LibGodot::updateWindow(std::string windowName) {
-	std::lock_guard<std::recursive_mutex> lock(windowMapMutex);
-	if (windowMap.contains(windowName)) {
-		godot::GodotInstance *instance = GodotModule::get_singleton()->get_instance();
-		WindowData &data = windowMap[windowName];
-		if (instance && instance->is_started()) {
-			GodotModule::get_singleton()->runOnGodotThread(createUpdateWindowFunc(windowName, data.width, data.height, data.surface));
+	std::shared_ptr<WindowData> state;
+	{
+		std::lock_guard<std::mutex> lock(windowMapMutex);
+		auto it = windowMap.find(windowName);
+		if (it != windowMap.end()) {
+			state = it->second;
 		}
+	}
+	if (state) {
+		scheduleWindowUpdate(windowName, state);
 	}
 }
 
 void LibGodot::updateWindows() {
-	std::lock_guard<std::recursive_mutex> lock(windowMapMutex);
-	godot::GodotInstance *instance = GodotModule::get_singleton()->get_instance();
-	if (instance && instance->is_started()) {
-		for (auto item : windowMap) {
-			std::string windowName = item.first;
-			WindowData &data = item.second;
-			GodotModule::get_singleton()->runOnGodotThread(
-					createUpdateWindowFunc(windowName, data.width, data.height, data.surface));
+	std::vector<std::pair<std::string, std::shared_ptr<WindowData>>> windows;
+	{
+		std::lock_guard<std::mutex> lock(windowMapMutex);
+		for (const auto &entry : windowMap) {
+			windows.push_back(entry);
 		}
+	}
+	for (const auto &[name, state] : windows) {
+		scheduleWindowUpdate(name, state);
 	}
 }
 
@@ -360,18 +405,14 @@ struct TouchPos {
 	godot::Vector2 tilt;
 };
 
-static int32_t getWindowId(std::string p_name) {
-	std::lock_guard<std::recursive_mutex> lock(windowMapMutex);
-	if (windowMap.contains(p_name)) {
-		return windowMap[p_name].id;
-	}
-	return -1;
-}
-
 static std::map<int32_t, std::vector<TouchPos>> touches;
 
 void LibGodot::clear_input_state() {
 	touches.clear();
+	std::lock_guard<std::mutex> lock(windowMapMutex);
+	for (const auto &[name, state] : windowMap) {
+		state->id = name.empty() ? 0 : -1;
+	}
 }
 
 extern "C" {
@@ -403,22 +444,37 @@ JNIEXPORT void JNICALL Java_com_preeternal_reactnativegodot_RTNLibGodot_dispatch
 }
 
 JNIEXPORT jobjectArray JNICALL Java_com_preeternal_reactnativegodot_RTNLibGodot_getRendererInfo(JNIEnv *env, jclass clazz) {
-	godot::String rendering_driver = godot::RenderingServer::get_singleton()->get_current_rendering_driver_name();
-	godot::String rendering_method = godot::RenderingServer::get_singleton()->get_current_rendering_method();
-
+	std::string driver, method;
+	GodotModule::get_singleton()->runOnGodotThread([&]() {
+		auto *instance = GodotModule::get_singleton()->get_instance();
+		if (!instance || !instance->is_started()) {
+			return;
+		}
+		driver = godot::RenderingServer::get_singleton()->get_current_rendering_driver_name().utf8().get_data();
+		method = godot::RenderingServer::get_singleton()->get_current_rendering_method().utf8().get_data();
+	},
+			true);
 	jobjectArray result = env->NewObjectArray(2, env->FindClass("java/lang/String"), nullptr);
-	env->SetObjectArrayElement(result, 0, env->NewStringUTF(rendering_driver.utf8().get_data()));
-	env->SetObjectArrayElement(result, 1, env->NewStringUTF(rendering_method.utf8().get_data()));
-
+	env->SetObjectArrayElement(result, 0, env->NewStringUTF(driver.c_str()));
+	env->SetObjectArrayElement(result, 1, env->NewStringUTF(method.c_str()));
 	return result;
 }
 
 JNIEXPORT jstring JNICALL Java_com_preeternal_reactnativegodot_RTNLibGodot_getGlobal(JNIEnv *env, jclass clazz, jstring path) {
-	godot::String js = jstring_to_string(path, env);
-
-	godot::Variant setting_with_override = godot::ProjectSettings::get_singleton()->get_setting_with_override(js);
-	godot::String setting_value = (setting_with_override.get_type() == godot::Variant::NIL) ? "" : setting_with_override;
-	return env->NewStringUTF(setting_value.utf8().get_data());
+	std::string key = convertToStdString(env, path), value;
+	GodotModule::get_singleton()->runOnGodotThread([&]() {
+		auto *instance = GodotModule::get_singleton()->get_instance();
+		if (!instance || !instance->is_started()) {
+			return;
+		}
+		godot::Variant setting = godot::ProjectSettings::get_singleton()->get_setting_with_override(godot::String::utf8(key.c_str()));
+		if (setting.get_type() != godot::Variant::NIL) {
+			godot::String text = setting;
+			value = text.utf8().get_data();
+		}
+	},
+			true);
+	return env->NewStringUTF(value.c_str());
 }
 
 JNIEXPORT void JNICALL
@@ -442,13 +498,28 @@ JNIEXPORT void JNICALL Java_com_preeternal_reactnativegodot_RTNLibGodot_dispatch
 		return;
 	}
 	std::string windowName = convertToStdString(env, p_name);
-	GodotModule::get_singleton()->runOnGodotThread([windowName, positions = std::move(positions), p_event, p_pointer, pointer_count, p_double_tap]() {
-
-		godot::GodotInstance *instance = GodotModule::get_singleton()->get_instance();
-		if (!instance || !instance->is_started()) {
+	auto *module = GodotModule::get_singleton();
+	const uint64_t engineGeneration = module->get_instance_generation();
+	std::shared_ptr<WindowData> state;
+	uint64_t attachmentGeneration;
+	{
+		std::lock_guard<std::mutex> lock(windowMapMutex);
+		auto it = windowMap.find(windowName);
+		if (it == windowMap.end() || !it->second->active) {
 			return;
 		}
-		int32_t windowId = getWindowId(windowName);
+		state = it->second;
+		attachmentGeneration = state->attachmentGeneration;
+	}
+	module->runWithInstance(engineGeneration, [windowName, state, attachmentGeneration, positions = std::move(positions), p_event, p_pointer, pointer_count, p_double_tap]() {
+		int32_t windowId;
+		{
+			std::lock_guard<std::mutex> lock(windowMapMutex);
+			if (!state->active || state->attachmentGeneration != attachmentGeneration) {
+				return;
+			}
+			windowId = state->id;
+		}
 		if (windowId < 0) {
 			LOGE("Could not find window for name: %s", windowName.c_str());
 			return;

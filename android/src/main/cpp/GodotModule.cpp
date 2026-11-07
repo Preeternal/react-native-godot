@@ -285,7 +285,8 @@ godot::GodotInstance *GodotModule::get_or_create_instance(std::vector<std::strin
 	godot::GodotInstance *result = nullptr;
 	runOnGodotThread([this, &args, &result]() {
 		result = get_or_create_instance_on_godot_thread(std::move(args));
-	}, true);
+	},
+			true);
 	return result;
 }
 
@@ -422,6 +423,7 @@ godot::GodotInstance *GodotModule::get_or_create_instance_on_godot_thread(std::v
 		data->func_libgodot_destroy_godot_instance = destroy;
 
 		_instance = instance;
+		_instanceGeneration.store(++_lastInstanceGeneration);
 		inBackground = data->in_background;
 	}
 
@@ -449,7 +451,8 @@ double GodotModule::get_content_scale_factor() {
 void GodotModule::destroy_instance() {
 	runOnGodotThread([this]() {
 		destroy_instance_on_godot_thread();
-	}, true);
+	},
+			true);
 }
 
 void GodotModule::destroy_instance_on_godot_thread() {
@@ -479,6 +482,7 @@ void GodotModule::destroy_instance_on_godot_thread() {
 		data->mainNativeWindow = nullptr;
 		data->mainSurface = godot::Ref<godot::RenderingNativeSurface>(nullptr);
 
+		_instanceGeneration.store(0);
 		LibGodot::clear_input_state();
 		data->func_libgodot_destroy_godot_instance(_instance->_owner);
 		_instance = nullptr;
@@ -606,7 +610,7 @@ void GodotModule::updateState() {
 		data->frameCallbackPending = true;
 		const uint64_t generation = data->frameCallbackGeneration;
 		AChoreographer *choreographer = AChoreographer_getInstance();
-		postFrameCallback(choreographer, new FrameCallbackData{this, generation});
+		postFrameCallback(choreographer, new FrameCallbackData{ this, generation });
 	});
 }
 
