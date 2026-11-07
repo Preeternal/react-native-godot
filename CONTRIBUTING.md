@@ -27,6 +27,12 @@ and IDE setup, follow [the example README](example/README.md).
 
 ### Checks
 
+Both iOS CI jobs build the ARM64 Simulator target. The installed LibGodot engine
+does not include an x86_64 Simulator slice, so a generic universal Simulator
+build is unsupported. `scripts/ci/verify-ios-simulator.py` checks both framework
+manifests and binary architectures before native builds. Keep the example's
+`build:ios` architecture and the SwiftPM job's `ARCHS` setting consistent.
+
 ```sh
 yarn typecheck
 yarn example typecheck

@@ -338,6 +338,9 @@ jobs:
       - name: Setup
         uses: ./.github/actions/setup
 
+      - name: Verify ARM64 Simulator prebuilts
+        run: python3 scripts/ci/verify-ios-simulator.py --arch arm64
+
       - name: Cache turborepo for iOS
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
@@ -403,6 +406,9 @@ jobs:
       - name: Setup
         uses: ./.github/actions/setup
 
+      - name: Verify ARM64 Simulator prebuilts
+        run: python3 scripts/ci/verify-ios-simulator.py --arch arm64
+
       - name: Use appropriate Xcode version
         uses: maxim-lobanov/setup-xcode@ed7a3b1fda3918c0306d1b724322adc0b8cc0a90 # v1.7.0
         with:
@@ -452,6 +458,7 @@ jobs:
             -sdk iphonesimulator \
             -destination 'generic/platform=iOS Simulator' \
             -derivedDataPath example/ios/build/DerivedData \
+            ARCHS=arm64 \
             COMPILER_INDEX_STORE_ENABLE=NO \
             DISABLE_MANUAL_TARGET_ORDER_BUILD_WARNING=YES \
             CODE_SIGNING_ALLOWED=NO \

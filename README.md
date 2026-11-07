@@ -304,6 +304,8 @@ The native bridge selects these defaults before creating the engine instance:
 
 The Simulator package is built with `metal=no`. Leave the renderer arguments
 unset to use the target's defaults, or supply an explicit supported pair.
+The bundled Simulator engine supports `arm64` (Apple silicon); it does not
+include an Intel/x86_64 Simulator binary.
 An explicit Metal request in Simulator fails before engine creation. Startup
 failure does not automatically retry with another renderer.
 
