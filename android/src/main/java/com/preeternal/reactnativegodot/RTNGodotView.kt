@@ -25,6 +25,10 @@ class RTNGodotView(context: Context) : SurfaceView(context), SurfaceHolder.Callb
       ViewGroup.LayoutParams.MATCH_PARENT,
       ViewGroup.LayoutParams.MATCH_PARENT,
     )
+    // The embedded Godot buffer is a child SurfaceControl. Keep it above the
+    // opaque React Native activity surface; default SurfaceView ordering leaves
+    // the rendered frame underneath the app canvas.
+    setZOrderMediaOverlay(true)
     holder.addCallback(this)
   }
 
