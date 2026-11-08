@@ -4,22 +4,12 @@
 [![npm downloads](https://img.shields.io/npm/dm/@preeternal/react-native-godot.svg)](https://www.npmjs.com/package/@preeternal/react-native-godot)
 [![Patreon](https://img.shields.io/endpoint?url=https%3A%2F%2Fshieldsio-patreon.vercel.app%2Fapi%2F%3Fusername%3Dpreeternal%26type%3Dpatrons)](https://www.patreon.com/preeternal)
 
-Embed Godot in React Native apps on Android and iOS. Display Godot windows
-inside React Native views, control the engine lifecycle, and call Godot APIs
-from TypeScript or JavaScript.
+Bring interactive Godot scenes into your React Native app on Android and iOS.
+Build animated 3D previews, product viewers, interactive diagrams or small games
+alongside your existing screens and navigation.
 
-## Upstream / credits
-
-This is a maintained fork of the original React Native Godot integration.
-The native bridge, platform integration and LibGodot integration were developed
-and maintained by [Migeran](https://migeran.com).
-
-[Born](https://born.com) deserves credit for the original
-[React Native adaptation](https://github.com/borndotcom/react-native-godot)
-and early product integration.
-
-This fork is used in my own project. Maintenance and support depend on my needs
-and available time.
+Author scenes and animations in Godot, then control them from TypeScript or
+JavaScript. React Native handles the app UI; Godot renders inside a native view.
 
 ## Features
 
@@ -28,6 +18,21 @@ and available time.
 - Pause and resume a running instance.
 - Access Godot objects, methods, properties, signals and Callables from JavaScript.
 - Run Godot and its JavaScript worklets on a dedicated thread.
+- Choose OpenGL Compatibility, Metal on iOS devices, or Vulkan on Android.
+- Use audio playback by default and opt into microphone capture when needed.
+
+## Versions
+
+| Library release                | Godot version | Source branch                                                                  |
+| ------------------------------ | ------------- | ------------------------------------------------------------------------------ |
+| `0.1.0` — previous release     | 4.5.1         | [`godot-4.5`](https://github.com/Preeternal/react-native-godot/tree/godot-4.5) |
+| Upcoming release — this README | 4.7.2         | [`godot-4.7`](https://github.com/Preeternal/react-native-godot/tree/godot-4.7) |
+
+The 4.7 line is the current development focus. The `godot-4.5` branch is kept
+for possible fixes to the previous line; backports are considered as needed.
+Until the 4.7 library release is published, the npm installation commands below
+install `0.1.0`; use the [4.5 README](https://github.com/Preeternal/react-native-godot/blob/godot-4.5/README.md)
+for that release. See [Upgrading from 4.5](#upgrading-from-45) for migration notes.
 
 ## Compatibility
 
@@ -39,7 +44,8 @@ and available time.
 | Android      | Android 10 / API 29 or newer; `arm64-v8a` and `armeabi-v7a`         |
 | Expo         | Development Builds; Expo Go cannot load this native module          |
 
-The engine version is pinned by the installed library. This source branch uses
+The library includes a pinned engine; you do not need to build Godot yourself.
+This branch uses
 [LibGodot `4.7.2.preeternal.2`](https://github.com/Preeternal/libgodot/releases/tag/4.7.2.preeternal.2),
 based on Godot 4.7.2. Export your Godot content with a compatible editor.
 
@@ -191,82 +197,6 @@ scenes and imported resources under `.godot` may be missing from the APK.
 You can also load content from an accessible directory or pack downloaded to
 the app's private storage. Pass its path to `createInstance`.
 
-## Microphone support and prebuilt selection
-
-The default mobile artifacts use LibGodot **4.7.2.preeternal.2**, with native
-microphone capture and iOS microphone permission API references excluded at
-compile time. **Audio playback remains enabled.** Most embedded 3D previews
-do not need microphone access.
-
-This default also avoids an unnecessary App Store submission issue: Apple's
-checks can require a microphone purpose string when a bundled SDK references
-protected microphone APIs, even if the app never calls them. Runtime muting
-does not remove these references. See Apple's
-[Requesting access to protected resources](https://developer.apple.com/documentation/uikit/requesting-access-to-protected-resources).
-This addresses LibGodot's microphone references; other SDKs in an app still
-have their own requirements.
-
-No configuration is needed for the default. To enable microphone capture, add
-this top-level setting to **the consuming app's** `package.json`:
-
-```json
-{
-  "reactNativeGodot": {
-    "microphone": true
-  }
-}
-```
-
-This selects the existing recording-capable **4.7.2.preeternal.1** release and
-its matching C++ bindings. Set `microphone` to `false` or remove the setting to
-return to `.2`. Both releases use Godot 4.7.2, but this is a switch of complete
-release sets, not a runtime microphone toggle. The `.1` Android Maven version
-is `4.7.2.preeternal.1-SNAPSHOT`; `.2` uses `4.7.2.preeternal.2`.
-
-`postinstall` and the manual downloader read the same setting and download only
-the selected release set. After changing it, run from the app root:
-
-```sh
-node node_modules/@preeternal/react-native-godot/scripts/download-prebuilt.js
-```
-
-Alternatively, the downloader can save the setting in the app's `package.json`
-and fetch the selected artifacts in one command:
-
-```sh
-node node_modules/@preeternal/react-native-godot/scripts/download-prebuilt.js --with-recording
-# Save microphone: false and return to the default:
-node node_modules/@preeternal/react-native-godot/scripts/download-prebuilt.js --without-recording
-```
-
-Use `--app-root /path/to/app` when invoking outside the app. Previously
-downloaded versions are cached separately; changing variants does not fetch
-the unselected set. CocoaPods and Gradle read the app setting directly. Run
-`pod install` after changing it for CocoaPods, then rebuild the native app.
-SwiftPM's React Native autolinking plugin selects matching binary URLs and
-checksums independently of the downloader; run `npx react-native spm` after a
-change. Expo apps use the same `package.json` setting, with no audio plugin,
-Gradle, Podfile or Info.plist flags required.
-
-Recording-capable apps must still configure their microphone purpose string
-on iOS, `RECORD_AUDIO` and runtime permission handling on Android, and Godot's
-`audio/driver/enable_input` setting. This package does not grant permissions.
-
-For completely silent 3D content that should leave another app's music playing,
-select Godot's `Dummy` audio driver in your `project.godot` and re-export the
-project:
-
-```ini
-[audio]
-
-driver/driver="Dummy"
-driver/enable_input=false
-```
-
-This disables playback and input at runtime. Setting the master volume to zero
-does not disable the platform audio driver. See
-[Godot's audio driver setting](https://docs.godotengine.org/en/stable/classes/class_projectsettings.html#class-projectsettings-property-audio-driver-driver).
-
 ## Usage
 
 The following example uses `MainBundlePath` to locate the iOS pack. Install
@@ -304,7 +234,9 @@ function startGodot() {
   return runOnGodotThread(() => {
     'worklet';
     if (RTNGodot.getInstance() == null) {
-      RTNGodot.createInstance(args);
+      if (RTNGodot.createInstance(args) == null) {
+        throw new Error('Godot failed to start. Check the native logs.');
+      }
     }
   });
 }
@@ -356,6 +288,9 @@ const paused = RTNGodot.is_paused();
 ```
 
 Pausing keeps the instance alive.
+For previews shown across several screens, reuse the instance and pause it
+when it is idle instead of loading the project on every navigation. Release
+scene references and signal handlers when their consumer goes away.
 
 ### Named windows
 
@@ -369,27 +304,73 @@ The [example app](example/README.md) demonstrates this with React Navigation.
 
 ## Platform notes
 
-### iOS renderer policy
+### Choosing a renderer
 
-The native bridge selects these defaults before creating the engine instance:
+OpenGL Compatibility is a useful starting point for embedded previews and broad
+device coverage. Metal and Vulkan make Godot's Mobile renderer available for
+scenes that need its rendering features. Choose for your scene and target
+hardware: a newer graphics API does not automatically make a simple preview
+faster. See Godot's [renderer comparison](https://docs.godotengine.org/en/stable/tutorials/rendering/renderers.html).
 
-| Target             | Rendering driver        | Rendering method   | Native layer   |
-| ------------------ | ----------------------- | ------------------ | -------------- |
-| iPhone/iPad device | `metal`                 | `mobile`           | `CAMetalLayer` |
-| iOS Simulator      | `opengl3` (OpenGL ES 3) | `gl_compatibility` | `CAEAGLLayer`  |
+| Target        | Driver / rendering method      | When to use it                                            |
+| ------------- | ------------------------------ | --------------------------------------------------------- |
+| Android       | `opengl3` / `gl_compatibility` | Starting point; used by the example                       |
+| Android       | `vulkan` / `mobile`            | Optional; validate on your target GPUs                    |
+| iPhone/iPad   | `metal` / `mobile`             | Native bridge default when renderer arguments are omitted |
+| iPhone/iPad   | `opengl3` / `gl_compatibility` | Explicit Compatibility option                             |
+| iOS Simulator | `opengl3` / `gl_compatibility` | Only packaged option; selected automatically              |
 
-The Simulator package is built with `metal=no`. Leave the renderer arguments
-unset to use the target's defaults, or supply an explicit supported pair.
-The bundled Simulator engine supports `arm64` (Apple silicon); it does not
-include an Intel/x86_64 Simulator binary.
-An explicit Metal request in Simulator fails before engine creation. Startup
-failure does not automatically retry with another renderer.
+Pass the driver and method together in the arguments to `createInstance`,
+alongside your content path and `--display-driver embedded`:
 
-Device Metal can perform better than the Simulator preview, but speed depends
-on the scene and hardware. Benchmark on the target device: Simulator uses a
-different renderer and GPU environment, so its frame rate does not predict
-device performance. Materials, shaders and lighting can also differ between
-Mobile and Compatibility. Simulator results do not verify device Metal.
+```typescript
+// OpenGL Compatibility on Android or iOS, including Simulator:
+const rendererArgs = [
+  '--rendering-driver',
+  'opengl3',
+  '--rendering-method',
+  'gl_compatibility',
+];
+
+// Metal / Mobile on a physical iPhone or iPad:
+const metalArgs = [
+  '--rendering-driver',
+  'metal',
+  '--rendering-method',
+  'mobile',
+];
+
+// Vulkan / Mobile on a compatible Android device:
+const vulkanArgs = [
+  '--rendering-driver',
+  'vulkan',
+  '--rendering-method',
+  'mobile',
+];
+```
+
+Select the renderer before starting the engine. The bridge does not implement
+an automatic retry with a different renderer after startup failure. A
+JavaScript error handler cannot recover from a native crash. If you expose a
+renderer preference, keep a way to reset it before the next engine startup.
+
+Practical things to check before shipping:
+
+- **Lighting and materials:** Compatibility and Mobile can produce different
+  lighting, shadows and shader results. Tune the scene for each renderer you
+  offer, especially when matching a 3D background to the surrounding app UI.
+- **Android Vulkan:** black background regions, composition artifacts and slow
+  first display have been observed on some devices with embedded content.
+  Treat Vulkan as an opt-in path and test both inline and fullscreen views;
+  the Android version alone does not establish GPU/driver compatibility.
+- **First display:** loading a scene and preparing shaders can cost more than
+  showing it again. Compare Release builds on real devices, measuring both
+  first use and reuse. Creating an instance offscreen does not guarantee that
+  every shader has been prepared. See Godot's [shader compilation guidance](https://docs.godotengine.org/en/stable/tutorials/performance/pipeline_compilations.html).
+- **Simulator:** the package supports ARM64 on Apple silicon, uses OpenGL and
+  contains no Metal backend. Explicit Metal requests are rejected before
+  engine creation. Device Metal may perform better, but Simulator frame rates
+  and visuals do not predict device results; check the actual device.
 
 ### Android input
 
@@ -397,6 +378,67 @@ The embedded Android view currently forwards touch input. Godot's virtual
 keyboard, hardware keyboard, mouse, gamepad and sensor input, and standalone
 Godot Android plugins are not connected to this embedded path. Use React Native
 controls for interactions requiring those features.
+
+## Audio and microphone
+
+**Audio playback is enabled. Microphone capture is excluded from the default
+build.** No configuration is needed for projects that only play sound.
+
+Apple can require `NSMicrophoneUsageDescription` when a bundled SDK references
+protected microphone APIs, even if your app never records audio. The default
+LibGodot build removes capture code and its iOS microphone permission API
+references at compile time. Muting audio or disabling input at runtime cannot
+remove those references. See Apple's [protected resource requirements](https://developer.apple.com/documentation/uikit/requesting-access-to-protected-resources).
+Other SDKs in your app may still require their own purpose strings.
+
+### Enable microphone capture
+
+Add this top-level setting to **your app's** `package.json`:
+
+```json
+{
+  "reactNativeGodot": {
+    "microphone": true
+  }
+}
+```
+
+Then download the selected binaries from your app directory:
+
+```sh
+node node_modules/@preeternal/react-native-godot/scripts/download-prebuilt.js
+```
+
+Refresh iOS native dependencies (`bundle exec pod install` in `ios`, or
+`npx react-native spm` for SwiftPM), then rebuild the native app. Expo apps use
+the same `package.json` setting and also need a new native build.
+
+This selects recording-capable LibGodot `4.7.2.preeternal.1` instead of the
+default `4.7.2.preeternal.2`, with matching bindings. Both use Godot 4.7.2.
+Set `microphone` to `false` or remove it, then repeat these steps to return to
+the default. This is a native build choice; JavaScript reload cannot change it.
+
+Configure `NSMicrophoneUsageDescription` on iOS, `RECORD_AUDIO` and runtime
+permission handling on Android, and `audio/driver/enable_input=true` in your
+Godot project. Re-export after changing Godot settings. The library does not
+request microphone permission for you.
+
+### Silent previews and background music
+
+For visual-only content, select the `Dummy` audio driver in `project.godot`,
+then re-export and rebuild your app:
+
+```ini
+[audio]
+
+driver/driver="Dummy"
+driver/enable_input=false
+```
+
+This disables Godot audio output and input, avoiding its use of the platform
+audio driver when the preview needs no sound. Setting the master volume to
+zero still leaves that driver active. Check music from another app alongside
+your app's own audio session settings. See [Godot's audio driver setting](https://docs.godotengine.org/en/stable/classes/class_projectsettings.html#class-projectsettings-property-audio-driver-driver).
 
 ## Godot API
 
@@ -494,6 +536,30 @@ obtained. Keep API access and object manipulation inside Godot worklets; do not
 pass Godot objects between the main JavaScript runtime and the Godot runtime.
 After `destroyInstance`, discard references to the previous instance's objects.
 
+## Upgrading from 4.5
+
+The 4.7 line keeps the `RTNGodot`, `RTNGodotView` and `runOnGodotThread` entry
+points. Upgrade the library, its native engine packages and your exported Godot
+content together:
+
+1. Re-export PCK/ZIP content with Godot 4.7.2. Include the re-exported `.godot`
+   resources on Android; replace bundled packs and version any downloaded
+   content caches so an old export is not reused accidentally.
+2. Refresh native dependencies and rebuild the app. The library installs its
+   matching engine and bindings automatically; keep custom 4.5 binaries out
+   of a 4.7 installation. A JavaScript reload is insufficient.
+3. Review renderer arguments. An iOS device now defaults to Metal/Mobile;
+   choose `opengl3` / `gl_compatibility` explicitly to retain Compatibility.
+   Check lighting, shaders and the first visible frame on real devices.
+4. If your app records audio, [enable microphone capture](#enable-microphone-capture)
+   and configure permissions. Playback-only apps can use the default build.
+5. Check Start → Stop → Start, pause/resume, navigation, resize and any named
+   windows used by your app. Drop old Godot object references after Stop.
+
+For an app staying on 4.5, keep its library release and exported content
+together. The `godot-4.5` branch remains separate from the 4.7 line.
+See the [release notes](CHANGELOG.md) for the changes in this migration.
+
 ## Examples
 
 See the [example app and its setup instructions](example/README.md) for two
@@ -507,6 +573,19 @@ custom engine builds, debugging and release tooling.
 Issues and pull requests are welcome in the
 [GitHub repository](https://github.com/Preeternal/react-native-godot).
 See the [code of conduct](CODE_OF_CONDUCT.md).
+
+## Upstream / credits
+
+This maintained fork builds on the native bridge, platform integration and
+LibGodot integration developed by [Migeran](https://migeran.com).
+[Born](https://born.com) deserves credit for the original
+[React Native adaptation](https://github.com/borndotcom/react-native-godot)
+and early product integration.
+
+The fork adds the Godot 4.7 integration, renderer selection, native lifecycle
+and surface handling fixes, and installation tooling described in the
+[release notes](CHANGELOG.md). It is used in an actively developed app;
+maintenance follows practical integration needs and available time.
 
 ## License
 

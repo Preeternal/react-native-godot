@@ -100,9 +100,10 @@ checked against the empty templates and the Godot-specific differences.
 
 ## Prebuilt engine packages
 
-The `prebuiltFiles` entries in `package.json` select the release archives,
-SHA-256 checksums and destination directories. iOS archives are unpacked under
-`ios/libs`; Android archives are unpacked under `android/libs`.
+The library's `prebuiltFiles` entries in `package.json` select the default
+release archives, SHA-256 checksums and destination directories. Each entry's
+`with_recording` override supplies its recording-capable counterpart.
+iOS archives are unpacked under `ios/libs`; Android archives under `android/libs`.
 
 The release tag selects the archive directory. The Android `maven_version`
 selects the Maven coordinate declared by the archive's POM; these versions
@@ -117,6 +118,43 @@ yarn download-prebuilt
 
 The downloader requires `curl` and `unzip`. A missing download or checksum
 failure must be resolved before attempting a native build.
+
+### Microphone variants and app selection
+
+`scripts/prebuilt-config.js` reads `reactNativeGodot.microphone` from the
+consuming app's `package.json`. All native integration paths use this selector:
+the downloader, CocoaPods helper, Gradle, Expo repository setup and React Native
+SwiftPM autolinking plugin. Change the whole engine/bindings set together.
+
+| App setting       | LibGodot release                            | Android Maven version         |
+| ----------------- | ------------------------------------------- | ----------------------------- |
+| Absent or `false` | `4.7.2.preeternal.2` — playback, no capture | `4.7.2.preeternal.2`          |
+| `true`            | `4.7.2.preeternal.1` — playback and capture | `4.7.2.preeternal.1-SNAPSHOT` |
+
+Both variants use Godot 4.7.2. This selects native binaries before building;
+it does not toggle an existing engine's microphone at runtime. The no-record
+variant excludes capture code and iOS microphone permission API references.
+Keep playback support and the required audio framework links in that variant.
+
+For `postinstall`, app lookup starts at `INIT_CWD` (then the package manager's
+local prefix or working directory). When running the downloader outside the
+app, pass `--app-root /path/to/app`. These commands save the app setting and
+download only the selected set:
+
+```sh
+node scripts/download-prebuilt.js --app-root /path/to/app --with-recording
+node scripts/download-prebuilt.js --app-root /path/to/app --without-recording
+```
+
+Already downloaded versions are cached in separate version directories. New
+downloads are checksum-verified before the selected target is replaced.
+The SwiftPM plugin generates matching binary URLs/checksums independently of
+the downloader and watches the app's `package.json`; regenerate the workspace
+after changing the selection. CocoaPods also needs a new `pod install`.
+Every variant change requires rebuilding the native app.
+
+Consumer permission setup, the reason for the no-record default and silent
+project settings belong in the [README audio section](README.md#audio-and-microphone).
 
 ### Using a custom LibGodot build
 
@@ -171,7 +209,8 @@ selection in `android/build.gradle` to match. For archives providing
 api "com.migeran.libgodot:godot-debug:${libGodotMavenVersion}"
 ```
 
-Update `prebuiltFiles[].maven_version` if the custom POM uses a different
+Update the selected `prebuiltFiles` entry's `maven_version` (or its
+`with_recording.maven_version` override) if the custom POM uses a different
 version. Do not change dependency pins or replace release checksums merely to
 hide an incompatible archive.
 

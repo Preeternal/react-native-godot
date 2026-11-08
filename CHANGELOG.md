@@ -2,29 +2,83 @@
 
 ## Unreleased
 
-### Changed
+A Godot 4.7.2 integration for embedded Android and iOS scenes, with updated
+native bindings, renderer selection and lifecycle handling. The public
+`RTNGodot`, `RTNGodotView` and `runOnGodotThread` entry points remain available.
 
-- Default mobile prebuilts now use LibGodot `4.7.2.preeternal.2`, which excludes
-  native microphone capture and iOS microphone permission API references while
-  retaining audio playback. Most embedded 3D content does not need a microphone.
-  Apple may require a purpose string for protected APIs referenced by bundled
-  SDKs even when the app does not call them; excluding this code avoids that
-  unnecessary microphone-related submission issue. See Apple's
-  [Requesting access to protected resources](https://developer.apple.com/documentation/uikit/requesting-access-to-protected-resources).
-- Apps that need microphone capture can set `reactNativeGodot.microphone: true`
-  in their own `package.json` to select the recording-capable
-  `4.7.2.preeternal.1` artifacts and matching bindings. `postinstall`, the manual
-  downloader, CocoaPods, Gradle and React Native's SwiftPM autolinking use the
-  same selection; only the selected release set is downloaded.
+### Engine and rendering
 
-### Added
+- Migrated the Android and iOS bridge to Godot 4.7's native ABI, generated
+  bindings and embedded surface APIs, including the updated Android services
+  and JNI contract.
+- Added target-aware iOS renderer selection before engine startup: Metal/Mobile
+  on devices, OpenGL ES 3/Compatibility in Simulator. Device apps can explicitly
+  choose Compatibility. Unsupported Simulator Metal requests fail before
+  creating the engine instance.
+- Retained Android OpenGL Compatibility and optional Vulkan/Mobile rendering.
+  The example starts Android with Compatibility explicitly.
+- Included engine fixes for mobile OpenGL orientation and drawable sizing,
+  including iOS backing pixel dimensions and Android live surface size queries.
 
-- Downloader options `--with-recording` and `--without-recording` save the
-  selection in the consuming app's `package.json` before downloading. No
-  microphone or audio flags in Gradle, Podfile or Info.plist are required.
-- Documented the Godot `Dummy` driver for silent content that should not
-  interrupt music from another app; disabling playback is a project setting
-  independent of the microphone-free default.
+### Lifecycle and native views
+
+- Guarded queued attach, resize and input work against a stopped engine or a
+  replaced view attachment, preventing stale work from accessing old objects.
+- Coalesced Android resize requests and applied them on the Godot thread
+  without synchronously waiting on the UI thread. Native window references
+  remain retained until replacement or detach completes.
+- Fixed iOS rendering layer cleanup on Stop, kept window subscriptions separate
+  for each host view, and restricted shared main-layer resize/input to its
+  current owner. Preserved the preferred host across Stop/Start.
+- Corrected Android surface stacking above the React Native drawing surface,
+  and resolved iOS header conflicts and Fabric view initialization issues.
+
+### Installation and audio
+
+- Defaulted to LibGodot `4.7.2.preeternal.2`: audio playback remains enabled,
+  while native microphone capture and iOS microphone permission API references
+  are excluded at compile time. Apple can require a microphone purpose string
+  for protected APIs referenced by bundled SDKs even when the app never records;
+  runtime muting cannot remove those references. See Apple's
+  [protected resource requirements](https://developer.apple.com/documentation/uikit/requesting-access-to-protected-resources).
+- Added `reactNativeGodot.microphone: true` in the app's `package.json` to
+  select recording-capable `4.7.2.preeternal.1` with matching bindings.
+  The downloader, CocoaPods, Gradle, Expo integration and React Native SwiftPM
+  autolinking share this selection.
+- Added downloader `--with-recording` / `--without-recording` options to save
+  the app's selection and fetch that variant. Downloads verify SHA-256 before
+  replacing an installed payload; previously downloaded variants stay cached.
+- Added a repository Yarn install hook to restore missing engine packages
+  after branch changes or deleted downloads. Consumer installs continue to
+  download prebuilts through `postinstall`, with a manual retry command.
+- Aligned both iOS CI build paths with the packaged ARM64 Simulator binaries
+  and added engine/bindings slice checks before building.
+- Documented silent previews using Godot's `Dummy` audio driver, separately
+  from the microphone-free default.
+
+### Migration and platform notes
+
+- Re-export content with Godot 4.7.2, refresh native dependencies and rebuild
+  the app. Godot 4.5 binaries and bindings cannot be mixed into this installation.
+- iOS devices default to Metal/Mobile. Apps retaining OpenGL should explicitly
+  select `opengl3` / `gl_compatibility`; scene lighting and shaders may need
+  adjustments when moving between Compatibility and Mobile.
+- Microphone capture now requires opt-in, platform permissions and Godot input
+  configuration. Playback-only apps need no microphone setting.
+- iOS Simulator requires Apple silicon/ARM64 and uses Compatibility. Its
+  results do not establish device Metal performance or correctness.
+- Android Vulkan has device-dependent embedded background/composition and
+  startup issues under investigation. It is an opt-in path; check target GPUs
+  and inline/fullscreen transitions before shipping.
+- Android embedded input remains touch-only; standalone Godot Android plugins
+  and the other input paths listed in the README are not connected.
+- First-display cost and offscreen preparation remain dependent on the scene,
+  renderer and GPU. This release does not promise faster startup or identical
+  output across renderers.
+
+The previous `0.1.0` release uses Godot 4.5.1; its source is retained on
+`godot-4.5` for possible focused fixes. See the [upgrade guide](README.md#upgrading-from-45)
+and [renderer notes](README.md#choosing-a-renderer) before migrating.
 
 ---
 

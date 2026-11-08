@@ -6,6 +6,8 @@ controls, and a named subwindow opened through React Navigation native stack.
 
 The main implementation is in [`src/App.tsx`](src/App.tsx). Use Start 1 or
 Start 2 to launch a Godot project, and Stop to shut down the engine.
+To switch projects, press Stop before the other Start button. Both projects
+share one engine instance.
 On iOS, `@dr.pogodin/react-native-fs` locates the bundled PCK files. Android
 loads the exported resources from `android/app/src/main/assets`.
 
@@ -15,6 +17,8 @@ The native iOS bridge selects the renderer before creating the instance:
 Metal/Mobile on a physical iPhone or iPad, OpenGL ES 3/Compatibility in
 Simulator. Android uses OpenGL compatibility. The example does not force
 Metal for every iOS target or retry with another renderer after a failure.
+See the library's [renderer choices and device caveats](../README.md#choosing-a-renderer)
+for explicit OpenGL, Metal and Vulkan arguments.
 
 Initialization errors show an alert. A native process crash cannot be caught
 by this alert. Simulator results do not verify device Metal or predict its
