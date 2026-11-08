@@ -152,7 +152,7 @@
     {
       "name": "libgodot",
       "filename": "libgodot.xcframework.zip",
-      "version": "4.7.2.preeternal.1-rc.4",
+      "version": "4.7.2.preeternal.1",
       "base_url": "https://github.com/Preeternal/libgodot/releases/download/",
       "shasum": "6bbf51634153ad9206352e36d069cbdf4e8a2a63e11e828a73b38e9a6adc5de5",
       "destination_base_dir": "ios/libs",
@@ -162,7 +162,7 @@
     {
       "name": "libgodot-cpp",
       "filename": "libgodot-cpp.xcframework.zip",
-      "version": "4.7.2.preeternal.1-rc.4",
+      "version": "4.7.2.preeternal.1",
       "base_url": "https://github.com/Preeternal/libgodot/releases/download/",
       "shasum": "a6a7f0737c9cd5eb981098fe253f794df27aafd14835f6889da3536de92d550e",
       "destination_base_dir": "ios/libs",
@@ -172,7 +172,7 @@
     {
       "name": "libgodot-android",
       "filename": "libgodot-android.zip",
-      "version": "4.7.2.preeternal.1-rc.4",
+      "version": "4.7.2.preeternal.1",
       "base_url": "https://github.com/Preeternal/libgodot/releases/download/",
       "shasum": "e5b94be7fe7f74ce2f147f90ccb2c28a972a91638734d6518807593c15d2c7db",
       "destination_base_dir": "android/libs",
@@ -183,7 +183,7 @@
     {
       "name": "libgodot-cpp-android",
       "filename": "godot-cpp-android.zip",
-      "version": "4.7.2.preeternal.1-rc.4",
+      "version": "4.7.2.preeternal.1",
       "base_url": "https://github.com/Preeternal/libgodot/releases/download/",
       "shasum": "90966d0add089ebffe3baa3f4ea918d329e22fbc0b1a3c267d3c7ef7476f41cc",
       "destination_base_dir": "android/libs",

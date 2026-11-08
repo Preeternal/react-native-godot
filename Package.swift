@@ -9,7 +9,7 @@ let reactHeaders: [Target.Dependency] = [
   .product(name: "ReactAppHeaders", package: "React-GeneratedCode"),
 ]
 
-let libGodotVersion = "4.7.2.preeternal.1-rc.4"
+let libGodotVersion = "4.7.2.preeternal.1"
 let libGodotBaseURL = "https://github.com/Preeternal/libgodot/releases/download/\(libGodotVersion)"
 
 let package = Package(
