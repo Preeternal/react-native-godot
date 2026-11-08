@@ -25,7 +25,7 @@ const {
   withGradleProperties,
   withXcodeProject,
 } = loadExpoConfigPlugins();
-const { prebuiltFiles } = require('./package.json');
+const { resolvePrebuiltConfig } = require('./scripts/prebuilt-config');
 
 const ANDROID_PROPERTIES = {
   'android.minSdkVersion': '29',
@@ -36,13 +36,6 @@ const GODOT_ASSET_PATTERN =
   '!.svn:!.git:!.ds_store:!*.scc:<dir>_*:!CVS:!thumbs.db:!picasa.ini:!*~';
 const GODOT_ASSETS_START = '// @generated begin react-native-godot-assets';
 const GODOT_ASSETS_END = '// @generated end react-native-godot-assets';
-const libGodotAndroid = prebuiltFiles.find(
-  (entry) => entry.name === 'libgodot-android'
-);
-
-if (!libGodotAndroid) {
-  throw new Error('Missing libgodot-android prebuilt metadata in package.json');
-}
 
 function setGradleProperty(properties, key, value) {
   const property = properties.find(
@@ -67,6 +60,9 @@ function isGodotMavenRepository(repository) {
 }
 
 function addGodotMavenRepository(properties, platformProjectRoot) {
+  const libGodotAndroid = resolvePrebuiltConfig(
+    platformProjectRoot
+  ).prebuiltFiles.find((entry) => entry.name === 'libgodot-android');
   const property = properties.find(
     (entry) => entry.type === 'property' && entry.key === GODOT_MAVEN_PROPERTY
   );

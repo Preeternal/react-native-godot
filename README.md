@@ -40,7 +40,7 @@ and available time.
 | Expo         | Development Builds; Expo Go cannot load this native module          |
 
 The engine version is pinned by the installed library. This source branch uses
-[LibGodot `4.7.2.preeternal.1`](https://github.com/Preeternal/libgodot/releases/tag/4.7.2.preeternal.1),
+[LibGodot `4.7.2.preeternal.2`](https://github.com/Preeternal/libgodot/releases/tag/4.7.2.preeternal.2),
 based on Godot 4.7.2. Export your Godot content with a compatible editor.
 
 ## Installation
@@ -190,6 +190,82 @@ scenes and imported resources under `.godot` may be missing from the APK.
 
 You can also load content from an accessible directory or pack downloaded to
 the app's private storage. Pass its path to `createInstance`.
+
+## Microphone support and prebuilt selection
+
+The default mobile artifacts use LibGodot **4.7.2.preeternal.2**, with native
+microphone capture and iOS microphone permission API references excluded at
+compile time. **Audio playback remains enabled.** Most embedded 3D previews
+do not need microphone access.
+
+This default also avoids an unnecessary App Store submission issue: Apple's
+checks can require a microphone purpose string when a bundled SDK references
+protected microphone APIs, even if the app never calls them. Runtime muting
+does not remove these references. See Apple's
+[Requesting access to protected resources](https://developer.apple.com/documentation/uikit/requesting-access-to-protected-resources).
+This addresses LibGodot's microphone references; other SDKs in an app still
+have their own requirements.
+
+No configuration is needed for the default. To enable microphone capture, add
+this top-level setting to **the consuming app's** `package.json`:
+
+```json
+{
+  "reactNativeGodot": {
+    "microphone": true
+  }
+}
+```
+
+This selects the existing recording-capable **4.7.2.preeternal.1** release and
+its matching C++ bindings. Set `microphone` to `false` or remove the setting to
+return to `.2`. Both releases use Godot 4.7.2, but this is a switch of complete
+release sets, not a runtime microphone toggle. The `.1` Android Maven version
+is `4.7.2.preeternal.1-SNAPSHOT`; `.2` uses `4.7.2.preeternal.2`.
+
+`postinstall` and the manual downloader read the same setting and download only
+the selected release set. After changing it, run from the app root:
+
+```sh
+node node_modules/@preeternal/react-native-godot/scripts/download-prebuilt.js
+```
+
+Alternatively, the downloader can save the setting in the app's `package.json`
+and fetch the selected artifacts in one command:
+
+```sh
+node node_modules/@preeternal/react-native-godot/scripts/download-prebuilt.js --with-recording
+# Save microphone: false and return to the default:
+node node_modules/@preeternal/react-native-godot/scripts/download-prebuilt.js --without-recording
+```
+
+Use `--app-root /path/to/app` when invoking outside the app. Previously
+downloaded versions are cached separately; changing variants does not fetch
+the unselected set. CocoaPods and Gradle read the app setting directly. Run
+`pod install` after changing it for CocoaPods, then rebuild the native app.
+SwiftPM's React Native autolinking plugin selects matching binary URLs and
+checksums independently of the downloader; run `npx react-native spm` after a
+change. Expo apps use the same `package.json` setting, with no audio plugin,
+Gradle, Podfile or Info.plist flags required.
+
+Recording-capable apps must still configure their microphone purpose string
+on iOS, `RECORD_AUDIO` and runtime permission handling on Android, and Godot's
+`audio/driver/enable_input` setting. This package does not grant permissions.
+
+For completely silent 3D content that should leave another app's music playing,
+select Godot's `Dummy` audio driver in your `project.godot` and re-export the
+project:
+
+```ini
+[audio]
+
+driver/driver="Dummy"
+driver/enable_input=false
+```
+
+This disables playback and input at runtime. Setting the master volume to zero
+does not disable the platform audio driver. See
+[Godot's audio driver setting](https://docs.godotengine.org/en/stable/classes/class_projectsettings.html#class-projectsettings-property-audio-driver-driver).
 
 ## Usage
 

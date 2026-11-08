@@ -93,16 +93,20 @@ def reactNativeRootDir = resolveReactNativeDirectory()
 
 def prefabHeadersDir = project.file("$buildDir/prefab-headers/rtngodot")
 
-def getPrebuiltLibrary(libName) {
-    // package.json resides at the repository root (one level up from android/)
-    def packageFile = file("$projectDir/../package.json")
-    if (!packageFile.exists()) {
-        throw new GradleException("Unable to locate package.json at ${packageFile}")
-    }
+def selectionProcess = [
+    "node", file("$projectDir/../scripts/prebuilt-config.js").absolutePath,
+    "--app-root", rootProject.projectDir.absolutePath,
+].execute(null, projectDir)
+def selectionOut = new StringBuilder()
+def selectionErr = new StringBuilder()
+selectionProcess.consumeProcessOutput(selectionOut, selectionErr)
+if (selectionProcess.waitFor() != 0) {
+    throw new GradleException("[RTNGodot] Unable to select LibGodot: ${selectionErr}")
+}
+def selectedPrebuilts = new JsonSlurper().parseText(selectionOut.toString()).prebuiltFiles
 
-    def json = new JsonSlurper().parse(packageFile)
-
-    def entry = json.prebuiltFiles?.find { it.name == libName }
+def getPrebuiltLibrary = { libName ->
+    def entry = selectedPrebuilts.find { it.name == libName }
 
     if (!entry) {
         throw new GradleException("Prebuilt entry not found for library '${libName}'. Ensure it exists in package.json.")

@@ -17,8 +17,8 @@ function loadPlugin() {
   const localRequire = (id) =>
     id === 'expo/config-plugins'
       ? configPlugins
-      : id === './package.json'
-        ? require('../../package.json')
+      : id.startsWith('./')
+        ? require(path.join(root, id))
         : require(id);
   localRequire.resolve = (id) => id;
   const context = {

@@ -10,10 +10,12 @@ if (!fs.existsSync(packageJsonPath)) {
   throw new Error(`Package manifest not found: ${packageJsonPath}`);
 }
 
-const packageJson = JSON.parse(fs.readFileSync(packageJsonPath, 'utf8'));
+const { prebuiltFiles } = require(
+  path.join(packageRoot, 'scripts/prebuilt-config.js')
+).resolvePrebuiltConfig();
 const missing = [];
 
-for (const entry of packageJson.prebuiltFiles ?? []) {
+for (const entry of prebuiltFiles) {
   const target = path.join(
     packageRoot,
     entry.destination_base_dir,
@@ -35,5 +37,5 @@ if (missing.length > 0) {
 }
 
 console.log(
-  `Verified ${packageJson.prebuiltFiles.length} prebuilt directories in ${packageRoot}`
+  `Verified ${prebuiltFiles.length} prebuilt directories in ${packageRoot}`
 );

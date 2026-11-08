@@ -1,5 +1,33 @@
 # Releases
 
+## Unreleased
+
+### Changed
+
+- Default mobile prebuilts now use LibGodot `4.7.2.preeternal.2`, which excludes
+  native microphone capture and iOS microphone permission API references while
+  retaining audio playback. Most embedded 3D content does not need a microphone.
+  Apple may require a purpose string for protected APIs referenced by bundled
+  SDKs even when the app does not call them; excluding this code avoids that
+  unnecessary microphone-related submission issue. See Apple's
+  [Requesting access to protected resources](https://developer.apple.com/documentation/uikit/requesting-access-to-protected-resources).
+- Apps that need microphone capture can set `reactNativeGodot.microphone: true`
+  in their own `package.json` to select the recording-capable
+  `4.7.2.preeternal.1` artifacts and matching bindings. `postinstall`, the manual
+  downloader, CocoaPods, Gradle and React Native's SwiftPM autolinking use the
+  same selection; only the selected release set is downloaded.
+
+### Added
+
+- Downloader options `--with-recording` and `--without-recording` save the
+  selection in the consuming app's `package.json` before downloading. No
+  microphone or audio flags in Gradle, Podfile or Info.plist are required.
+- Documented the Godot `Dummy` driver for silent content that should not
+  interrupt music from another app; disabling playback is a project setting
+  independent of the microphone-free default.
+
+---
+
 ## v0.1.0 - First Public Release
 
 First release of the maintained fork of the original

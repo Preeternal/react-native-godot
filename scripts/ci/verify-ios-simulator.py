@@ -14,7 +14,7 @@ def verify(root, architectures):
     for name in ("libgodot", "libgodot-cpp"):
         entry = entries[name]
         framework = (root / entry["destination_base_dir"] / name /
-                     entry["version"] / entry["filename"].removesuffix(".zip"))
+                     entry["version"] / (name + ".xcframework"))
         with (framework / "Info.plist").open("rb") as stream:
             libraries = plistlib.load(stream)["AvailableLibraries"]
         simulators = [item for item in libraries
