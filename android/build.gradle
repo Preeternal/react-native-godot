@@ -93,31 +93,41 @@ def reactNativeRootDir = resolveReactNativeDirectory()
 
 def prefabHeadersDir = project.file("$buildDir/prefab-headers/rtngodot")
 
-def getPrebuiltLibraryVersion(libName) {
-    // package.json resides at the repository root (one level up from android/)
-    def packageFile = file("$projectDir/../package.json")
-    if (!packageFile.exists()) {
-        throw new GradleException("Unable to locate package.json at ${packageFile}")
-    }
+def selectionProcess = [
+    "node", file("$projectDir/../scripts/prebuilt-config.js").absolutePath,
+    "--app-root", rootProject.projectDir.absolutePath,
+].execute(null, projectDir)
+def selectionOut = new StringBuilder()
+def selectionErr = new StringBuilder()
+selectionProcess.consumeProcessOutput(selectionOut, selectionErr)
+if (selectionProcess.waitFor() != 0) {
+    throw new GradleException("[RTNGodot] Unable to select LibGodot: ${selectionErr}")
+}
+def selectedPrebuilts = new JsonSlurper().parseText(selectionOut.toString()).prebuiltFiles
 
-    def json = new JsonSlurper().parse(packageFile)
-
-    def entry = json.prebuiltFiles?.find { it.name == libName }
+def getPrebuiltLibrary = { libName ->
+    def entry = selectedPrebuilts.find { it.name == libName }
 
     if (!entry) {
         throw new GradleException("Prebuilt entry not found for library '${libName}'. Ensure it exists in package.json.")
     }
 
-    return entry.version
+    return entry
 }
 
-def libGodotVersion = getPrebuiltLibraryVersion("libgodot-android")
-def godotCppVersion = getPrebuiltLibraryVersion("libgodot-cpp-android")
+def libGodotPackage = getPrebuiltLibrary("libgodot-android")
+def libGodotVersion = libGodotPackage.version
+def libGodotMavenVersion = libGodotPackage.maven_version
+def godotCppVersion = getPrebuiltLibrary("libgodot-cpp-android").version
 def libGodotMavenRepo = file("$projectDir/libs/libgodot-android/${libGodotVersion}").canonicalFile
+
+if (!libGodotMavenVersion) {
+  throw new GradleException("[RTNGodot] Android Maven version is missing from package.json.")
+}
 
 if (!libGodotMavenRepo.isDirectory()) {
   throw new GradleException(
-    "[RTNGodot] Bundled LibGodot Maven repository was not found at ${libGodotMavenRepo}. " +
+    "[RTNGodot] LibGodot Maven repository was not found at ${libGodotMavenRepo}. " +
     "Run the package's download-prebuilt command before building Android."
   )
 }
@@ -136,7 +146,6 @@ rootProject.allprojects { targetProject ->
       }
     }
   }
-
 }
 
 buildscript {
@@ -257,13 +266,6 @@ android {
 }
 
 repositories {
-  maven {
-    name = "libgodot"
-    url = uri(libGodotMavenRepo)
-    content {
-      includeGroup("com.migeran.libgodot")
-    }
-  }
   mavenCentral()
   google()
 }
@@ -271,7 +273,7 @@ repositories {
 dependencies {
   implementation 'com.facebook.react:react-native'
   implementation project(':react-native-worklets')
-  api "com.migeran.libgodot:godot:${libGodotVersion}-SNAPSHOT"
+  api "com.migeran.libgodot:godot:${libGodotMavenVersion}"
   testImplementation 'junit:junit:4.13.2'
 }
 

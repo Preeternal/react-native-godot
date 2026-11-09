@@ -3,21 +3,32 @@ package com.preeternal.reactnativegodot
 import android.annotation.SuppressLint
 import android.content.Context
 import android.util.Log
+import android.view.GestureDetector
 import android.view.MotionEvent
 import android.view.SurfaceHolder
 import android.view.SurfaceView
 import android.view.ViewGroup
-import org.godotengine.godot.input.GodotInputHandler
 
 class RTNGodotView(context: Context) : SurfaceView(context), SurfaceHolder.Callback2 {
-  private val inputHandler: GodotInputHandler? = RTNLibGodot.getInstance().inputHandler
   private var windowName = ""
+  private var doubleTap = false
+  private val gestureDetector = GestureDetector(context, object : GestureDetector.SimpleOnGestureListener() {
+    override fun onDown(event: MotionEvent): Boolean = true
+    override fun onDoubleTap(event: MotionEvent): Boolean {
+      doubleTap = true
+      return true
+    }
+  })
 
   init {
     layoutParams = ViewGroup.LayoutParams(
       ViewGroup.LayoutParams.MATCH_PARENT,
       ViewGroup.LayoutParams.MATCH_PARENT,
     )
+    // The embedded Godot buffer is a child SurfaceControl. Keep it above the
+    // opaque React Native activity surface; default SurfaceView ordering leaves
+    // the rendered frame underneath the app canvas.
+    setZOrderMediaOverlay(true)
     holder.addCallback(this)
   }
 
@@ -50,29 +61,29 @@ class RTNGodotView(context: Context) : SurfaceView(context), SurfaceHolder.Callb
 
   @SuppressLint("ClickableViewAccessibility")
   override fun onTouchEvent(event: MotionEvent): Boolean {
-    super.onTouchEvent(event)
-    return inputHandler?.onTouchEvent(event) ?: false
-  }
-
-  override fun onGenericMotionEvent(event: MotionEvent): Boolean =
-    inputHandler?.onGenericMotionEvent(event) ?: false
-
-  override fun onCapturedPointerEvent(event: MotionEvent): Boolean =
-    inputHandler?.onGenericMotionEvent(event) ?: false
-
-  override fun requestPointerCapture() {
-    super.requestPointerCapture()
-    inputHandler?.onPointerCaptureChange(true)
-  }
-
-  override fun releasePointerCapture() {
-    super.releasePointerCapture()
-    inputHandler?.onPointerCaptureChange(false)
-  }
-
-  override fun onPointerCaptureChange(hasCapture: Boolean) {
-    super.onPointerCaptureChange(hasCapture)
-    inputHandler?.onPointerCaptureChange(hasCapture)
+    if (event.actionMasked == MotionEvent.ACTION_DOWN) doubleTap = false
+    gestureDetector.onTouchEvent(event)
+    val positions = FloatArray(event.pointerCount * 6)
+    for (index in 0 until event.pointerCount) {
+      val offset = index * 6
+      positions[offset] = event.getPointerId(index).toFloat()
+      positions[offset + 1] = event.getX(index)
+      positions[offset + 2] = event.getY(index)
+      positions[offset + 3] = event.getPressure(index)
+      val tilt = event.getAxisValue(MotionEvent.AXIS_TILT, index)
+      val orientation = event.getOrientation(index)
+      positions[offset + 4] = -kotlin.math.sin(orientation) * kotlin.math.sin(tilt)
+      positions[offset + 5] = kotlin.math.cos(orientation) * kotlin.math.sin(tilt)
+    }
+    RTNLibGodot.getInstance().dispatchTouchEvent(
+      windowName,
+      event.actionMasked,
+      event.getPointerId(event.actionIndex),
+      event.pointerCount,
+      positions,
+      doubleTap,
+    )
+    return true
   }
 
   companion object {

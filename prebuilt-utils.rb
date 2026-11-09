@@ -1,5 +1,6 @@
 require "json"
 require "fileutils"
+require "open3"
 
 # ----------------------------------------------------------------------
 # Helper: Returns the relative path to the pre‑built library directory.
@@ -23,9 +24,18 @@ def prebuilt_path(lib_name)
     raise "Unable to locate package.json at #{package_path}"
   end
 
-  package = JSON.parse(File.read(package_path))
-
-  entry = package["prebuiltFiles"]&.find { |e| e["name"] == lib_name }
+  app_root = if defined?(Pod::Config)
+    Pod::Config.instance.installation_root.to_s
+  else
+    Dir.pwd
+  end
+  node = ENV.fetch("NODE_BINARY", "node")
+  output, error, status = Open3.capture3(
+    node, File.join(__dir__, "scripts/prebuilt-config.js"), "--app-root", app_root
+  )
+  raise "[RTNGodot] Unable to select LibGodot: #{error}" unless status.success?
+  selection = JSON.parse(output)
+  entry = selection["prebuiltFiles"]&.find { |e| e["name"] == lib_name }
 
   unless entry
     raise "Prebuilt entry not found for library '#{lib_name}'. Ensure it exists in package.json."

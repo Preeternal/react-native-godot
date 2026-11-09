@@ -2,6 +2,7 @@ module.exports = {
   // Keep React Native's SwiftPM autolinker aligned with Package.swift.
   spm: {
     name: 'ReactNativeGodot',
+    autolinkingPlugin: './scripts/spm-autolinking-plugin.js',
   },
   dependency: {
     platforms: {

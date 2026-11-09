@@ -38,9 +38,6 @@ class LibGodot {
 	static inline jobject dir_access_handler = nullptr;
 	static inline jobject file_access_handler = nullptr;
 	static inline jobject godot_io = nullptr;
-	static inline jobject godot_engine = nullptr;
-	static inline jobject class_loader = nullptr;
-	static inline jobject host_activity = nullptr;
 
 public:
 	static jobject get_asset_manager() {
@@ -60,18 +57,6 @@ public:
 		return godot_io;
 	}
 
-	static jobject get_godot_engine() {
-		return godot_engine;
-	}
-
-	static jobject get_host_activity() {
-		return host_activity;
-	}
-
-	static jobject get_class_loader() {
-		return class_loader;
-	}
-
 	static ANativeWindow *get_main_surface();
 
 	static int get_main_width();
@@ -82,9 +67,10 @@ public:
 
 	static void set_java_vm(JavaVM *vm);
 
-	static void initialize(JNIEnv *env, jobject p_asset_manager, jobject p_net_utils, jobject p_dir_access_handler, jobject p_file_access_handler, jobject p_godot_io, jobject p_main_surface, jint p_width, jint p_height, jobject p_godot_engine, jobject p_host_activity, jobject p_class_loader);
+	static void initialize(JNIEnv *env, jobject p_asset_manager, jobject p_net_utils, jobject p_dir_access_handler, jobject p_file_access_handler, jobject p_godot_io, jobject p_main_surface, jint p_width, jint p_height);
 
 	static void cleanup(JNIEnv *env);
+	static void clear_input_state();
 
 	static void updateWindowNative(JNIEnv *env, jstring p_name, jobject p_surface, jint p_width, jint p_height);
 

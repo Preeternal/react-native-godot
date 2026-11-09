@@ -37,13 +37,7 @@ extern "C" {
 #define LIBGODOT_API __attribute__((visibility("default")))
 #endif // if defined(_MSC_VER)
 
-#if __has_include("core/extension/gdextension_interface.h")
-#include "core/extension/gdextension_interface.h"
-#elif __has_include("gdextension_interface.h")
-#include "gdextension_interface.h"
-#else
-#error gdextension_interface.h is required
-#endif
+#include "../../../../cpp/LibGodotABI.h"
 
 #include <jni.h>
 
@@ -59,7 +53,7 @@ extern "C" {
  *
  * @return A pointer to created \ref GodotInstance GDExtension object or nullptr if there was an error.
  */
-LIBGODOT_API GDExtensionObjectPtr libgodot_create_godot_instance_android(int p_argc, char *p_argv[], GDExtensionInitializationFunction p_init_func, JNIEnv *env, jobject p_asset_manager, jobject p_net_utils, jobject p_directory_access_handler, jobject p_file_access_handler, jobject p_godot_io_wrapper, jobject p_godot_wrapper, jobject p_class_loader);
+LIBGODOT_API GDExtensionObjectPtr libgodot_create_godot_instance_android(int p_argc, char *p_argv[], GDExtensionInitializationFunction p_init_func, RNLibGodotLogCallbackFunction p_log_func, RNLibGodotLogCallbackData p_log_data, JNIEnv *env, jobject p_asset_manager, jobject p_net_utils, jobject p_directory_access_handler, jobject p_file_access_handler, jobject p_godot_io_wrapper);
 
 /**
  * @name libgodot_destroy_godot_instance

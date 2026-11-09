@@ -11,7 +11,7 @@ import {
   RTNGodotView,
   runOnGodotThread,
 } from '@preeternal/react-native-godot';
-import { Button, StyleSheet, View, Platform } from 'react-native';
+import { Alert, Button, StyleSheet, View, Platform } from 'react-native';
 import { MainBundlePath } from '@dr.pogodin/react-native-fs';
 
 import { NavigationContainer } from '@react-navigation/native';
@@ -26,46 +26,33 @@ type RootStackParamList = {
 const Stack = createNativeStackNavigator<RootStackParamList>();
 
 function initGodot(name: string) {
-  if (RTNGodot.getInstance() != null) {
-    return;
+  const args =
+    Platform.OS === 'android'
+      ? ['--path', '/' + name]
+      : ['--main-pack', `${MainBundlePath}/${name}.pck`];
+  args.push('--verbose', '--display-driver', 'embedded');
+  if (Platform.OS === 'android') {
+    args.push(
+      '--rendering-driver',
+      'opengl3',
+      '--rendering-method',
+      'gl_compatibility'
+    );
   }
+  // The iOS bridge chooses Metal on devices and OpenGL in Simulator before create.
 
   runOnGodotThread(() => {
     'worklet';
 
-    if (Platform.OS === 'android') {
-      RTNGodot.createInstance([
-        // Uncomment and fill in the correct IP address and port for debugging in the Godot Editor.
-        // Check the documentation for the complete procedure.
-        // "--remote-debug",
-        // "tcp://IP_ADDRESS:6007",
-        '--verbose',
-        '--path',
-        '/' + name,
-        '--rendering-driver',
-        'opengl3',
-        '--rendering-method',
-        'gl_compatibility',
-        '--display-driver',
-        'embedded',
-      ]);
-    } else {
-      const args = [
-        // Uncomment and fill in the correct IP address and port for debugging in the Godot Editor.
-        // Check the documentation for the complete procedure.
-        // "--remote-debug",
-        // "tcp://IP_ADDRESS:6007",
-        '--verbose',
-        '--main-pack',
-        `${MainBundlePath}/${name}.pck`,
-        '--display-driver',
-        'embedded',
-      ];
-
-      args.push('--rendering-driver', 'metal', '--rendering-method', 'mobile');
-
-      RTNGodot.createInstance(args);
+    if (RTNGodot.getInstance() != null) return;
+    if (RTNGodot.createInstance(args) == null) {
+      throw new Error(
+        'Godot initialization failed. See the native engine log for details.'
+      );
     }
+  }).catch((error: unknown) => {
+    const message = error instanceof Error ? error.message : String(error);
+    Alert.alert('Godot failed to start', message, [{ text: 'OK' }]);
   });
 }
 

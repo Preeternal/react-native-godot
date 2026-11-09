@@ -22,8 +22,9 @@
  * Additional behaviour:
  * - If the target extraction folder (`destination_base_dir/name/version`) already
  *   exists and is not empty, the script skips processing that entry.
- * - If `destination_base_dir/name` exists but does not contain the target version
- *   folder (or is otherwise dirty), it is removed recursively before processing.
+ * - The app's reactNativeGodot.microphone selects one complete release set.
+ * - --with-recording / --without-recording save that choice in the app package.json.
+ * - Previously installed versions are preserved when switching variants.
  *
  * NOTE:
  * The `destination_base_dir` values in package.json are now interpreted as
@@ -35,7 +36,12 @@ const fs = require('fs');
 const path = require('path');
 const os = require('os');
 const crypto = require('crypto');
-const { execSync, execFile } = require('child_process');
+const { execFileSync, execFile } = require('child_process');
+const {
+  resolvePrebuiltConfig,
+  setMicrophone,
+  parseArguments,
+} = require('./prebuilt-config');
 
 // Resolve the library's package.json (the script lives in ./scripts/)
 const libPackagePath = path.resolve(__dirname, '..', 'package.json');
@@ -72,7 +78,7 @@ function downloadFile(url, destPath) {
       }
     }
 
-    execFile('curl', ['-L', '-o', destPath, url], (error) => {
+    execFile('curl', ['-fL', '-o', destPath, url], (error) => {
       if (error) {
         // Clean up partial download
         if (fs.existsSync(destPath)) {
@@ -108,7 +114,9 @@ function computeSha256(filePath) {
  */
 function unzipFile(zipPath, targetDir) {
   try {
-    execSync(`unzip -o "${zipPath}" -d "${targetDir}"`, { stdio: 'inherit' });
+    execFileSync('unzip', ['-qo', zipPath, '-d', targetDir], {
+      stdio: 'inherit',
+    });
   } catch (err) {
     throw new Error(`Failed to unzip ${zipPath}: ${err.message}`);
   }
@@ -140,6 +148,14 @@ function resolveRepoRelative(relativePath) {
  * Main processing loop.
  */
 (async () => {
+  const options = parseArguments(process.argv.slice(2));
+  if (options.microphone !== undefined) {
+    setMicrophone(options.appRoot, options.microphone);
+  }
+  const selection = resolvePrebuiltConfig(options.appRoot);
+  console.log(
+    `LibGodot microphone: ${selection.microphone ? 'enabled (.1)' : 'excluded (.2)'}`
+  );
   // Determine whether checksum verification should be performed.
   const skipChecksum =
     process.env.SHASUM_CHECK &&
@@ -149,7 +165,7 @@ function resolveRepoRelative(relativePath) {
     process.env.REPLACE_EXISTING &&
     process.env.REPLACE_EXISTING.toLowerCase() === 'true';
 
-  for (const entry of libPackage.prebuiltFiles) {
+  for (const entry of selection.prebuiltFiles) {
     const {
       name,
       filename,
@@ -170,10 +186,6 @@ function resolveRepoRelative(relativePath) {
     // Resolve destination directories relative to the repository root.
     const destBaseFull = resolveRepoRelative(destination_base_dir);
     const extractDir = path.join(destBaseFull, name, version);
-    const parentNameDir = path.join(destBaseFull, name);
-
-    // Temporary location for the zip file.
-    const tmpPath = path.join(os.tmpdir(), filename);
 
     // -----------------------------------------------------------------
     // Skip logic: if target folder exists and is non‑empty, skip entry.
@@ -187,20 +199,8 @@ function resolveRepoRelative(relativePath) {
       }
     }
 
-    // -----------------------------------------------------------------
-    // Clean parent folder if it exists (to avoid stale files from previous runs)
-    // -----------------------------------------------------------------
-    if (fs.existsSync(parentNameDir)) {
-      console.log(
-        `Cleaning existing directory ${parentNameDir} before processing.`
-      );
-      try {
-        fs.rmSync(parentNameDir, { recursive: true, force: true });
-      } catch (err) {
-        console.error(`Failed to remove ${parentNameDir}: ${err.message}`);
-        process.exit(1);
-      }
-    }
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'rtngodot-prebuilt-'));
+    const tmpPath = path.join(tmpDir, filename);
 
     try {
       // -------------------------------------------------------------
@@ -250,25 +250,34 @@ function resolveRepoRelative(relativePath) {
       // -------------------------------------------------------------
       // 4️⃣ Extract
       // -------------------------------------------------------------
-      fs.mkdirSync(extractDir, { recursive: true });
+      const stagedDir = path.join(tmpDir, 'extracted');
+      fs.mkdirSync(stagedDir);
       console.log(`Extracting to ${extractDir}`);
       if (need_unzip) {
-        unzipFile(tmpPath, extractDir);
+        unzipFile(tmpPath, stagedDir);
       } else {
-        const copyPath = path.join(extractDir, filename);
+        const copyPath = path.join(stagedDir, filename);
         fs.copyFileSync(tmpPath, copyPath);
       }
+      if (fs.existsSync(extractDir)) fs.rmSync(extractDir, { recursive: true });
+      fs.mkdirSync(path.dirname(extractDir), { recursive: true });
+      fs.cpSync(stagedDir, extractDir, {
+        recursive: true,
+        verbatimSymlinks: true,
+      });
       console.log('Extraction completed.');
     } catch (err) {
       console.error(`Error processing ${name}: ${err.message}`);
-      process.exit(1);
+      process.exitCode = 1;
+      return;
     } finally {
       // Clean up temporary file
-      if (fs.existsSync(tmpPath)) {
-        fs.unlinkSync(tmpPath);
-      }
+      fs.rmSync(tmpDir, { recursive: true, force: true });
     }
   }
 
   console.log('\nAll prebuilt files have been processed successfully.');
-})();
+})().catch((error) => {
+  console.error(error.message);
+  process.exitCode = 1;
+});

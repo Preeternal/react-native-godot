@@ -28,8 +28,12 @@
 #include <godot_cpp/classes/godot_instance.hpp>
 #include <godot_cpp/classes/rendering_native_surface.hpp>
 
+#include <atomic>
+#include <cstdint>
 #include <future>
 #include <mutex>
+#include <optional>
+#include <utility>
 
 struct PlatformData {};
 
@@ -38,17 +42,23 @@ class GodotModule {
 	PlatformData *_data = nullptr;
 
 	std::mutex _mutex;
+	std::atomic<uint64_t> _instanceGeneration{ 0 };
+	uint64_t _lastInstanceGeneration = 0; // Godot thread only.
 
 	std::function<void(const char *, bool)> logFunction;
 
 	GodotModule(PlatformData *data) :
 			_data(data) {}
 
+	godot::GodotInstance *get_or_create_instance_on_godot_thread(std::vector<std::string> args);
+	void destroy_instance_on_godot_thread();
+
 public:
 	static GodotModule *get_singleton();
 
 	godot::GodotInstance *get_or_create_instance(std::vector<std::string> args);
 
+	// Only use the returned binding on the Godot thread, where Stop is serialized.
 	godot::GodotInstance *get_instance() {
 		std::unique_lock lock(_mutex);
 		return _instance;
@@ -89,7 +99,20 @@ public:
 
 	void runOnGodotThread(std::function<void()> f, bool wait = false);
 
-	void iterate();
+	uint64_t get_instance_generation() const {
+		return _instanceGeneration.load();
+	}
+
+	void runWithInstance(uint64_t generation, std::function<void()> f) {
+		runOnGodotThread([this, generation, f = std::move(f)]() {
+			if (generation != 0 && generation == get_instance_generation() &&
+					_instance && _instance->is_started()) {
+				f();
+			}
+		});
+	}
+
+	void iterate(std::optional<uint64_t> frameGeneration = std::nullopt);
 
 	void set_log_callback(std::function<void(const char *, bool)> lf) {
 		logFunction = lf;

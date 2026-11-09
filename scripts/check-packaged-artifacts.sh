@@ -43,6 +43,8 @@ required_paths=(
   package/react-native.config.js
   package/prebuilt-utils.rb
   package/scripts/download-prebuilt.js
+  package/scripts/prebuilt-config.js
+  package/scripts/spm-autolinking-plugin.js
   package/src/index.tsx
   package/lib/module/index.js
   package/lib/typescript/src/index.d.ts

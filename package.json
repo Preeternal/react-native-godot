@@ -150,43 +150,63 @@
   "prebuiltFiles": [
     {
       "name": "libgodot",
-      "filename": "libgodot.xcframework.zip",
-      "version": "4.5.1.preeternal.1",
+      "filename": "libgodot-no-record.xcframework.zip",
+      "version": "4.7.2.preeternal.2",
       "base_url": "https://github.com/Preeternal/libgodot/releases/download/",
-      "shasum": "441131c7bd1b02a95dd336346e5afce3c777881c646a661d09d4a4918c413423",
+      "shasum": "e088cbbf952bc073ec79748239c6fb10284b587158794de9cb3a2d59587b9239",
       "destination_base_dir": "ios/libs",
       "env": "LIBGODOT_XCFRAMEWORK_PATH",
-      "no_unpack": "false"
+      "no_unpack": "false",
+      "with_recording": {
+        "filename": "libgodot.xcframework.zip",
+        "version": "4.7.2.preeternal.1",
+        "shasum": "6bbf51634153ad9206352e36d069cbdf4e8a2a63e11e828a73b38e9a6adc5de5"
+      }
     },
     {
       "name": "libgodot-cpp",
       "filename": "libgodot-cpp.xcframework.zip",
-      "version": "4.5.1.preeternal.1",
+      "version": "4.7.2.preeternal.2",
       "base_url": "https://github.com/Preeternal/libgodot/releases/download/",
-      "shasum": "a39d8ec108fd7083b0c336c2cd559fe5eb78ffd02437f268100e7ce34ac972fd",
+      "shasum": "06454281ae25121d086dded03c88037568152e0c97ccaea2d97c6f6cb1567a4b",
       "destination_base_dir": "ios/libs",
       "env": "LIBGODOT_CPP_XCFRAMEWORK_PATH",
-      "no_unpack": "false"
+      "no_unpack": "false",
+      "with_recording": {
+        "version": "4.7.2.preeternal.1",
+        "shasum": "a6a7f0737c9cd5eb981098fe253f794df27aafd14835f6889da3536de92d550e"
+      }
     },
     {
       "name": "libgodot-android",
-      "filename": "libgodot-android.zip",
-      "version": "4.5.1.preeternal.1",
+      "filename": "libgodot-android-no-record.zip",
+      "version": "4.7.2.preeternal.2",
       "base_url": "https://github.com/Preeternal/libgodot/releases/download/",
-      "shasum": "8ea2a0e70c61d867c0d0938a2f142ae544f69c5e94b4f574c924fb60f13fc729",
+      "shasum": "409d6395bd60b68c9b42e5695d41f21a6dd8c618ecb671edd00b978c706fb3a1",
       "destination_base_dir": "android/libs",
       "env": "LIBGODOT_ANDROID_PATH",
-      "no_unpack": "false"
+      "no_unpack": "false",
+      "maven_version": "4.7.2.preeternal.2",
+      "with_recording": {
+        "filename": "libgodot-android.zip",
+        "version": "4.7.2.preeternal.1",
+        "shasum": "e5b94be7fe7f74ce2f147f90ccb2c28a972a91638734d6518807593c15d2c7db",
+        "maven_version": "4.7.2.preeternal.1-SNAPSHOT"
+      }
     },
     {
       "name": "libgodot-cpp-android",
       "filename": "godot-cpp-android.zip",
-      "version": "4.5.1.preeternal.1",
+      "version": "4.7.2.preeternal.2",
       "base_url": "https://github.com/Preeternal/libgodot/releases/download/",
-      "shasum": "e0f343a94360ccad3dc75577416921ed36e3300df6531045ca786d7857ce2c83",
+      "shasum": "f8a596f023b65eabf0afb0b88f699d5ac52ca301a6e61e6ca8e1db1d681d2c48",
       "destination_base_dir": "android/libs",
       "env": "LIBGODOT_CPP_ANDROID_PATH",
-      "no_unpack": "false"
+      "no_unpack": "false",
+      "with_recording": {
+        "version": "4.7.2.preeternal.1",
+        "shasum": "90966d0add089ebffe3baa3f4ea918d329e22fbc0b1a3c267d3c7ef7476f41cc"
+      }
     }
   ],
   "react-native-builder-bob": {
