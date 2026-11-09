@@ -1,6 +1,6 @@
 # Releases
 
-## Unreleased
+## v0.2.0 — Godot 4.7, Metal & native lifecycle improvements
 
 A Godot 4.7.2 integration for embedded Android and iOS scenes, with updated
 native bindings, renderer selection and lifecycle handling. The public
