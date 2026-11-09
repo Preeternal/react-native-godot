@@ -26,13 +26,10 @@ JavaScript. React Native handles the app UI; Godot renders inside a native view.
 | Library release                | Godot version | Source branch                                                                  |
 | ------------------------------ | ------------- | ------------------------------------------------------------------------------ |
 | `0.1.0` — previous release     | 4.5.1         | [`godot-4.5`](https://github.com/Preeternal/react-native-godot/tree/godot-4.5) |
-| Upcoming release — this README | 4.7.2         | [`godot-4.7`](https://github.com/Preeternal/react-native-godot/tree/godot-4.7) |
+| `0.2.0` — this README          | 4.7.2         | [`godot-4.7`](https://github.com/Preeternal/react-native-godot/tree/godot-4.7) |
 
 The 4.7 line is the current development focus. The `godot-4.5` branch is kept
 for possible fixes to the previous line; backports are considered as needed.
-Until the 4.7 library release is published, the npm installation commands below
-install `0.1.0`; use the [4.5 README](https://github.com/Preeternal/react-native-godot/blob/godot-4.5/README.md)
-for that release. See [Upgrading from 4.5](#upgrading-from-45) for migration notes.
 
 ## Compatibility
 
